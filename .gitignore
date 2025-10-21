@@ -58,3 +58,40 @@ yarn-error.log*
 
 # MacOS
 .DS_Store
+
+# Python tooling / environments
+.python-version
+__pypackages__/
+pip-wheel-metadata/
+pip-log.txt
+
+# Caches
+.cache/
+.pytype/
+.ruff_cache/
+.pyright/
+.pyre/
+.dmypy.json
+dmypy.json
+.ipynb_checkpoints/
+
+# Tests & coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local databases (we use Postgres in prod/dev)
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs & temp
+logs/
+tmp/
+
+# Editors / workspaces
+*.code-workspace
+
+# OS junk
+Thumbs.db
