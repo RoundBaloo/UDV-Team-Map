@@ -1,35 +1,46 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, PrimaryKeyConstraint, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 
 class EmployeeTeam(Base):
-    """Связь сотрудник ↔ команда + роль и флаг основной команды."""
-
     __tablename__ = "employee_team"
 
+    # составной первичный ключ (employee_id + team_id)
     employee_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("employee.id", ondelete="CASCADE"), nullable=False
+        BigInteger,
+        ForeignKey("employee.id", ondelete="CASCADE"),
+        primary_key=True,
     )
+
     team_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("team.id", ondelete="CASCADE"), nullable=False
+        BigInteger,
+        ForeignKey("team.id", ondelete="CASCADE"),
+        primary_key=True,
     )
 
-    position_in_team: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # роль/позиция в команде
+    position_in_team: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    employee: Mapped["Employee"] = relationship(back_populates="teams")
-    team: Mapped["Team"] = relationship(back_populates="members")
+    # флаг "это основная команда сотрудника?"
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
 
-    __table_args__ = (
-        PrimaryKeyConstraint("employee_id", "team_id"),
-        Index("idx_employee_team_team_id", "team_id"),
-        Index("idx_employee_team_employee_id", "employee_id"),
-        # частично-уникальный: только для is_primary = true
-        # (SQLAlchemy не умеет частичные UniqueConstraint декларативно — оставим в DDL/миграции)
+    # никаких created_at тут не указываем, потому что физически в таблице её нет
+
+    # ORM-связи
+    employee: Mapped["Employee"] = relationship(
+        "Employee",
+        back_populates="team_links",
+    )
+
+    team: Mapped["Team"] = relationship(
+        "Team",
+        back_populates="member_links",
     )

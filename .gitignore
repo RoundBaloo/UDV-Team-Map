@@ -95,3 +95,33 @@ tmp/
 
 # OS junk
 Thumbs.db
+
+# ------------------------
+# Runtime / dev artifacts
+# ------------------------
+# PID/UNIX sockets (локальные рантайм-файлы серверов)
+*.pid
+*.sock
+
+# Editor swap/backup files
+*~
+*.swp
+*.swo
+*.bak
+*.orig
+
+# Python REPL / IPython history
+.python_history
+.ipython/
+
+# direnv (если используешь)
+.envrc
+
+# SQLite journals (на случай локальных тестов)
+*.sqlite-journal
+*.sqlite3-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# macOS resource forks (иногда появляются)
+._*

@@ -3,6 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List
 
+from sqlalchemy.dialects import postgresql
+
+from sqlalchemy.orm import relationship
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -10,10 +14,10 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    SmallInteger,
+    Integer,
     Text,
-    func,
     Computed,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,131 +26,150 @@ from app.models.base import Base
 
 
 class Employee(Base):
-    """Сотрудник."""
+    """Сотрудник компании."""
 
     __tablename__ = "employee"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    # идентификация
     external_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
 
-    # поля из внешней БД
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+
     status: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="active"
-    )
-    manager_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("employee.id", ondelete="SET NULL"), nullable=True
-    )
-    primary_org_unit_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("org_unit.id", ondelete="SET NULL"), nullable=True
+        Text,
+        nullable=False,
+        default="active",
     )
 
-    # редактируемые
+    # менеджер (руководитель сотрудника)
+    manager_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("employee.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # орг-юнит, к которому относится сотрудник
+    primary_org_unit_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("org_unit.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     grade: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     skills: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
     work_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     work_format: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     time_zone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # контакты
     work_phone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     personal_phone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     messengers: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
-    # даты/стаж
-    birth_day: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
-    birth_month: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
-    experience_months: Mapped[Optional[int]] = mapped_column(nullable=True)
+    birth_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    birth_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    experience_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    # фото
     photo_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("media.id", ondelete="SET NULL"), nullable=True
+        BigInteger,
+        ForeignKey("media.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
-    # слепок внешних данных
     last_applied_snapshot_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("external_entity_snapshot.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    # аутентификация/доступ
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    password_hash: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
     )
-    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # FTS STORED
+    # учётка заблокирована? (например, после увольнения или вручную)
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    # последний успешный вход
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # локальный флаг админа портала (не связан с AD)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    # STORED tsvector
     search_tsv: Mapped[str] = mapped_column(
-        TSVECTOR,
+        postgresql.TSVECTOR,
         Computed(
-            "setweight(to_tsvector('russian', coalesce(first_name,'')),'A') || "
-            "setweight(to_tsvector('russian', coalesce(last_name,'')),'A')  || "
-            "setweight(to_tsvector('russian', coalesce(title,'')),'B')      || "
-            "setweight(to_tsvector('russian', coalesce(grade,'')),'C')      || "
-            "setweight(to_tsvector('russian', coalesce(bio,'')),'D')        || "
-            "setweight(to_tsvector('russian', coalesce(skills::text,'')),'C')",
+            """
+            to_tsvector(
+                'simple',
+                lower(
+                    coalesce(first_name,'') || ' ' ||
+                    coalesce(last_name,'')  || ' ' ||
+                    coalesce(title,'')      || ' ' ||
+                    coalesce(email,'')
+                )
+            )
+            """,
             persisted=True,
         ),
         nullable=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
-    # relationships
+    # --- relationships ---
+
     manager: Mapped[Optional["Employee"]] = relationship(
-        remote_side="Employee.id", back_populates="subordinates"
-    )
-    subordinates: Mapped[List["Employee"]] = relationship(
-        back_populates="manager"
+        "Employee",
+        remote_side="Employee.id",
+        foreign_keys="Employee.manager_id",
     )
 
     primary_org_unit: Mapped[Optional["OrgUnit"]] = relationship(
-        back_populates="employees", foreign_keys=[primary_org_unit_id]
+        "OrgUnit",
+        foreign_keys="Employee.primary_org_unit_id",
     )
 
-    photo: Mapped[Optional["Media"]] = relationship()
-
-    teams: Mapped[List["EmployeeTeam"]] = relationship(
-        back_populates="employee", cascade="all, delete-orphan", passive_deletes=True
-    )
-
-    moderated_photos: Mapped[List["PhotoModeration"]] = relationship(
-        back_populates="employee", cascade="all, delete-orphan", passive_deletes=True
+    team_links: Mapped[List["EmployeeTeam"]] = relationship(
+        "EmployeeTeam",
+        back_populates="employee",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('active','dismissed')", name="ck_employee_status"
+            "status IN ('active','dismissed')",
+            name="ck_employee_status",
         ),
         CheckConstraint(
-            "work_format IS NULL OR work_format IN ('office','hybrid','remote')",
+            "(work_format IS NULL) OR (work_format IN ('office','hybrid','remote'))",
             name="ck_employee_work_format",
-        ),
-        CheckConstraint(
-            "birth_day IS NULL OR (birth_day BETWEEN 1 AND 31)",
-            name="ck_employee_birth_day",
-        ),
-        CheckConstraint(
-            "birth_month IS NULL OR (birth_month BETWEEN 1 AND 12)",
-            name="ck_employee_birth_month",
-        ),
-        CheckConstraint(
-            "experience_months IS NULL OR experience_months >= 0",
-            name="ck_employee_experience_months",
         ),
         Index(
             "idx_employee_last_name_trgm",
@@ -161,11 +184,6 @@ class Employee(Base):
             postgresql_ops={func.lower(title).key: "gin_trgm_ops"},
         ),
         Index("idx_employee_manager_id", "manager_id"),
-        Index("idx_employee_primary_org_unit_id", "primary_org_unit_id"),
         Index("idx_employee_status", "status"),
-        Index(
-            "idx_employee_search_tsv",
-            "search_tsv",
-            postgresql_using="gin",
-        ),
+        Index("idx_employee_search_tsv", "search_tsv", postgresql_using="gin"),
     )

@@ -62,6 +62,7 @@ def upgrade():
     op.execute("""
     CREATE TABLE IF NOT EXISTS org_unit (
       id BIGSERIAL PRIMARY KEY,
+      manager_id BIGINT NULL REFERENCES employee(id) ON DELETE SET NULL,
       parent_id BIGINT NULL REFERENCES org_unit(id) ON DELETE SET NULL,
       unit_type TEXT NOT NULL CHECK (unit_type IN ('block','department','direction')),
       name      TEXT NOT NULL,
@@ -77,6 +78,7 @@ def upgrade():
     CREATE INDEX IF NOT EXISTS idx_org_unit_name_trgm
       ON org_unit USING GIN (lower(name) gin_trgm_ops);
     """)
+    op.execute("CREATE INDEX IF NOT EXISTS idx_org_unit_manager_id ON org_unit (manager_id);")
 
     # 4) media
     op.execute("""
@@ -214,17 +216,20 @@ def upgrade():
 
     # 9) sync_record
     op.execute("""
-    CREATE TABLE IF NOT EXISTS sync_record (
+    CREATE TABLE sync_record (
       id           BIGSERIAL PRIMARY KEY,
-      job_id       BIGINT NOT NULL REFERENCES sync_job(id) ON DELETE CASCADE,
+      job_id       BIGINT NOT NULL REFERENCES sync_job(id),
       entity_type  TEXT NOT NULL CHECK (entity_type IN ('employee','team','org_unit')),
-      external_ref TEXT NOT NULL,
-      local_id     BIGINT NULL,
-      action       TEXT NOT NULL CHECK (action IN ('create','update','verify','archive')),
+      external_ref TEXT NOT NULL,          -- внешний ключ сущности из источника
+      local_id     BIGINT NULL,            -- локальный id (employee.id / team.id / org_unit.id)
+      action       TEXT NOT NULL CHECK (action IN ('create','update','archive')),
       status       TEXT NOT NULL CHECK (status IN ('applied','orphaned','error')),
-      decision     TEXT NULL CHECK (decision IN ('archive','keep') OR decision IS NULL),
-      decided_by_employee_id BIGINT NULL REFERENCES employee(id) ON DELETE SET NULL,
-      decided_at   TIMESTAMPTZ NULL,
+
+      -- для orphaned сотрудников:
+      decision                 TEXT NULL CHECK (decision IN ('archive','keep')),
+      decided_by_employee_id   BIGINT NULL REFERENCES employee(id),
+      decided_at               TIMESTAMPTZ NULL,
+
       message      TEXT NULL,
       created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
