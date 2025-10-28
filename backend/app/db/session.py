@@ -1,17 +1,36 @@
 from __future__ import annotations
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
-from typing import AsyncGenerator
 
-engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
-
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False, autoflush=False, autocommit=False
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    create_async_engine,
+    async_sessionmaker,
 )
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency: отдает асинхронную сессию БД и корректно её закрывает."""
-    from app.db.session import AsyncSessionLocal  # локальный импорт, чтобы избежать циклов
-    async with AsyncSessionLocal() as session:
+from app.core.config import settings
+
+
+# создаём async engine
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    future=True,
+)
+
+# фабрика асинхронных сессий
+async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+    autoflush=False,
+    autocommit=False,
+)
+
+# dependency для FastAPI
+async def get_async_session() -> AsyncSession:
+    async with async_session_maker() as session:
+        yield session
+
+
+# совместимость для старого кода (auth и т.д.)
+async def get_session() -> AsyncSession:
+    async with async_session_maker() as session:
         yield session

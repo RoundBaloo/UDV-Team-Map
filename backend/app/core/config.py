@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
 
     # === Подключение к БД ===
-    database_url: str = Field(..., env="DATABASE_URL")
+    DATABASE_URL: str = Field(..., env="DATABASE_URL")
 
     # === JWT / безопасность ===
     secret_key: str = Field(..., env="SECRET_KEY")
