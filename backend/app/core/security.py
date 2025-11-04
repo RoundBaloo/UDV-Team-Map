@@ -1,75 +1,114 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Optional
 
-import bcrypt
-from jose import jwt, JWTError
+import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.session import get_async_session
+from app.models.employee import Employee
+from app.schemas.common import ErrorResponse, ErrorCode
 
-ALLOWED_ALGS = {"HS256"}
-ALGORITHM = (
-    settings.jwt_algorithm if settings.jwt_algorithm in ALLOWED_ALGS else "HS256"
+# Парольный контекст:
+# 1) pbkdf2_sha256 — кросс-платформенно и без нативных зависимостей (по умолчанию)
+# 2) bcrypt — если установлен/рабочий, тоже будет корректно верифицироваться
+_pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256", "bcrypt"],
+    deprecated="auto",
 )
 
+def verify_password(plain: str, hashed: str) -> bool:
+    return _pwd_context.verify(plain, hashed)
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Проверяет, соответствует ли пароль хешу из БД.
+def get_password_hash(plain: str) -> str:
+    # хэшируем в pbkdf2_sha256 по умолчанию (устойчиво на Windows/Git Bash)
+    return _pwd_context.hash(plain)
 
-    Args:
-        plain_password: Пароль в открытом виде.
-        hashed_password: Bcrypt-хеш (строка) из БД.
-
-    Returns:
-        True, если пароль корректен, иначе False.
-    """
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
-
-
-def get_password_hash(password: str) -> str:
-    """Создает bcrypt-хеш пароля (используется при первичной загрузке из AD).
-
-    Args:
-        password: Пароль в открытом виде.
-
-    Returns:
-        Строка с bcrypt-хешем.
-    """
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
+_ALG = settings.jwt_algorithm
+_SECRET = settings.secret_key
+_ACCESS_MIN = settings.access_token_expire_minutes
 
 def create_access_token(
-    data: Dict[str, Any], expires_minutes: int | None = None
+    *,
+    subject: str,
+    expires_minutes: Optional[int] = None,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
-    """Создает JWT access-токен с ограниченным временем жизни.
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=expires_minutes or _ACCESS_MIN)
+    payload: dict[str, Any] = {"sub": subject, "exp": expire, "iat": now, "type": "access"}
+    if extra_claims:
+        payload.update(extra_claims)
+    return jwt.encode(payload, _SECRET, algorithm=_ALG)
 
-    Args:
-        data: Полезная нагрузка (например, {"sub": "<user_id>"}).
-        expires_minutes: Время жизни токена в минутах. Если не задано,
-            берется из настроек.
+def decode_token(token: str) -> dict[str, Any]:
+    try:
+        return jwt.decode(token, _SECRET, algorithms=[_ALG])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse.single(
+                code=ErrorCode.AUTH_TOKEN_EXPIRED,
+                message="Token expired",
+                status=401,
+            ).model_dump(),
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse.single(
+                code=ErrorCode.AUTH_INVALID_TOKEN,
+                message="Invalid token",
+                status=401,
+            ).model_dump(),
+        )
 
-    Returns:
-        Строка с JWT.
-    """
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=expires_minutes or settings.access_token_expire_minutes
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+_bearer = HTTPBearer(auto_error=True)
 
+async def get_current_user(
+    creds: HTTPAuthorizationCredentials = Depends(_bearer),
+    session: AsyncSession = Depends(get_async_session),
+) -> Employee:
+    payload = decode_token(creds.credentials)
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse.single(
+                code=ErrorCode.AUTH_INVALID_TOKEN,
+                message="Missing token subject",
+                status=401,
+            ).model_dump(),
+        )
 
-def decode_access_token(token: str) -> Dict[str, Any]:
-    """Проверяет подпись и декодирует JWT.
+    user_id = int(sub)
+    res = await session.execute(select(Employee).where(Employee.id == user_id))
+    user = res.scalar_one_or_none()
 
-    Args:
-        token: JWT-токен из заголовка Authorization.
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse.single(
+                code=ErrorCode.NOT_FOUND,
+                message="User not found",
+                status=401,
+            ).model_dump(),
+        )
 
-    Returns:
-        Раскодированная полезная нагрузка.
+    if user.is_blocked:
+        raise HTTPException(
+            status_code=403,
+            detail=ErrorResponse.single(
+                code=ErrorCode.AUTH_ACCOUNT_BLOCKED,
+                message="Account blocked",
+                status=403,
+            ).model_dump(),
+        )
 
-    Raises:
-        JWTError: если подпись/срок действия некорректны.
-    """
-    return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+    return user

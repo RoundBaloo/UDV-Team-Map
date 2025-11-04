@@ -14,7 +14,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import JSONB  # если не используешь тут - можно удалить импорт
+# from sqlalchemy.dialects.postgresql import JSONB  # лишний, можно удалить
 
 from app.models.base import Base
 
@@ -26,12 +26,6 @@ class OrgUnit(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    external_ref: Mapped[Optional[str]] = mapped_column(
-        Text,
-        unique=True,
-        nullable=True,
-    )
-
     parent_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("org_unit.id", ondelete="SET NULL"),
@@ -42,19 +36,15 @@ class OrgUnit(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
 
     is_archived: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
 
     # руководитель юнита (employee.id)
     manager_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("employee.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-
-    last_applied_snapshot_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger,
-        ForeignKey("external_entity_snapshot.id", ondelete="SET NULL"),
         nullable=True,
     )
 
@@ -73,7 +63,6 @@ class OrgUnit(Base):
     # relationships
     # -------------------
 
-    # parent/children оргструктуры
     parent: Mapped[Optional["OrgUnit"]] = relationship(
         "OrgUnit",
         remote_side="OrgUnit.id",
@@ -83,24 +72,14 @@ class OrgUnit(Base):
     children: Mapped[List["OrgUnit"]] = relationship(
         "OrgUnit",
         back_populates="parent",
-        cascade="all, delete-orphan",
         passive_deletes=True,
     )
 
-    # ✅ добавляем employees (чего не хватало)
-    # это список сотрудников, для которых этот OrgUnit является primary_org_unit
+    # cписок сотрудников, для которых этот OrgUnit — "наименьший" (lowest)
     employees: Mapped[List["Employee"]] = relationship(
         "Employee",
-        back_populates="primary_org_unit",
-        foreign_keys="Employee.primary_org_unit_id",
-        passive_deletes=True,
-    )
-
-    # список команд внутри юнита
-    teams: Mapped[List["Team"]] = relationship(
-        "Team",
-        back_populates="org_unit",
-        foreign_keys="Team.org_unit_id",
+        back_populates="lowest_org_unit",
+        foreign_keys="Employee.lowest_org_unit_id",
         passive_deletes=True,
     )
 
@@ -112,14 +91,17 @@ class OrgUnit(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "unit_type IN ('block','department','direction')",
+            "unit_type IN ('group','domain','legal_entity','department','direction')",
             name="ck_org_unit_unit_type",
         ),
-        # индекс по parent_id
         Index("idx_org_unit_parent_id", "parent_id"),
-        # индекс по manager_id
         Index("idx_org_unit_manager_id", "manager_id"),
-        # триграммный индекс для поиска по названию
+        Index(
+            "uq_org_unit_type_name_lower",
+            func.lower(name),
+            "unit_type",
+            unique=True,
+        ),
         Index(
             "idx_org_unit_name_trgm",
             func.lower(name),

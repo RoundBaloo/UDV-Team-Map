@@ -1,66 +1,54 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional, List
-
+from datetime import datetime, date
+from typing import Optional
 from pydantic import BaseModel
-
-
-class EmployeeTeamInfo(BaseModel):
-    team_id: int
-    team_name: str
-    position_in_team: Optional[str]
-    is_primary: bool
-    is_lead: bool
 
 
 class ManagerInfo(BaseModel):
     id: int
     first_name: str
     last_name: str
-    title: Optional[str]
+    title: Optional[str] = None
 
 
 class OrgUnitInfo(BaseModel):
     id: int
     name: str
+    unit_type: Optional[str] = None  # тип орг-юнита (legal_entity / department)
 
 
 class EmployeePublic(BaseModel):
-    """
-    Краткая инфа (для списка сотрудников).
-    Это то, что ты уже сейчас возвращаешь в /employees.
-    """
+    """Краткая инфа для списка сотрудников."""
     id: int
     first_name: str
     last_name: str
-    title: Optional[str]
+    email: str
+    title: Optional[str] = None
     status: str
 
 
 class EmployeeDetail(BaseModel):
-    """
-    Полная карточка сотрудника.
-    Это то, что будем возвращать в /employees/{id}.
-    """
+    """Полная карточка сотрудника (без команд и лишнего)."""
     id: int
+    email: str
+
     first_name: str
     last_name: str
-    title: Optional[str]
+    title: Optional[str] = None
     status: str
 
-    work_city: Optional[str]
-    work_format: Optional[str]
-    time_zone: Optional[str]
+    work_city: Optional[str] = None
+    work_format: Optional[str] = None
+    time_zone: Optional[str] = None
 
-    bio: Optional[str]
-    experience_months: Optional[int]
+    bio: Optional[str] = None
+    hire_date: Optional[date] = None
 
-    is_admin: bool
-    is_blocked: bool
-    last_login_at: Optional[datetime]
+    # оставляем дефолты, чтобы не спотыкаться, если БД/ORM вдруг не проставит
+    is_admin: bool = False
+    is_blocked: bool = False
+    last_login_at: Optional[datetime] = None
 
-    manager: Optional[ManagerInfo]
-    primary_org_unit: Optional[OrgUnitInfo]
-
-    teams: List[EmployeeTeamInfo]
+    manager: Optional[ManagerInfo] = None
+    org_unit: Optional[OrgUnitInfo] = None

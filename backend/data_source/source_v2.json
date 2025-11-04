@@ -1,52 +1,24 @@
-{
-  "org_units": [
-    {
-      "external_ref": "OU-BLOCK-1",
-      "name": "Platform Block",
-      "unit_type": "block",
-      "manager_external_ref": "EMP-001",
-      "parent_external_ref": null
-    },
-    {
-      "external_ref": "OU-DEPT-1",
-      "name": "Backend Department",
-      "unit_type": "department",
-      "manager_external_ref": "EMP-001",
-      "parent_external_ref": "OU-BLOCK-1"
-    }
-  ],
-  "teams": [
-    {
-      "external_ref": "TEAM-API",
-      "name": "API Team",
-      "description": "Public / internal API",
-      "org_unit_external_ref": "OU-DEPT-1",
-      "lead_external_ref": "EMP-001"
-    }
-  ],
-  "employees": [
-    {
-      "external_ref": "EMP-001",
-      "email": "alice@example.com",
-      "first_name": "Alice",
-      "last_name": "Ivanova",
-      "title": "Platform Director",
-      "status": "active",
-
-      "manager_external_ref": null,
-      "primary_org_unit_external_ref": "OU-BLOCK-1",
-
-      "bio": null,
-      "grade": null,
-      "skills": ["platform", "strategy"],
-      "work_city": "Moscow",
-      "work_format": "hybrid",
-      "time_zone": "Europe/Moscow",
-      "work_phone": "+7-000-000-0001",
-      "personal_phone": null,
-
-      "team_external_refs": ["TEAM-API"],
-      "primary_team_external_ref": "TEAM-API"
-    }
-  ]
-}
+[
+  {
+    "external_ref": "E1001",
+    "email": "ivan.petrov@example.com",
+    "first_name": "Иван",
+    "last_name": "Петров",
+    "title": "Senior Backend Developer",
+    "manager_external_ref": "E1003",
+    "company": "UDV Group",
+    "department": "Платформа",
+    "password_hash": "$2b$12$x4lYfDq/.YdT6pSDz.9UPe6K2IYvAPpE/3m6sXArYFblDMEuAfLDK"
+  },
+  {
+    "external_ref": "E1003",
+    "email": "maria.ivanova@example.com",
+    "first_name": "Мария",
+    "last_name": "Иванова",
+    "title": "Product Manager",
+    "manager_external_ref": null,
+    "company": "UDV Group",
+    "department": "Продукты",
+    "password_hash": "$2b$12$QxOCPk8Gtny4p8ItA7f3DObDTqWzT5hZJb6omr60Xe3UZuzM8jRx6"
+  }
+]

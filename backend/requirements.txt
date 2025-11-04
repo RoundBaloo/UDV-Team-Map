@@ -15,3 +15,5 @@ uvicorn==0.38.0
 python-jose[cryptography]
 bcrypt
 email-validator
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
