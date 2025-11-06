@@ -1,7 +1,7 @@
 # app/api/v1/employees_router.py
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,14 @@ from app.schemas.employee import (
     EmployeeDetail,
     ManagerInfo,
     OrgUnitInfo,
+    EmployeeSelfUpdate,
+    EmployeeAdminUpdate,
+)
+from app.services.employee_service import (
+    get_all_employees,
+    get_employee_with_refs,
+    apply_self_update,
+    apply_admin_update,
 )
 from app.schemas.common import ErrorResponse, ErrorCode
 
@@ -23,36 +31,65 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
+async def _build_employee_detail(employee: Employee) -> EmployeeDetail:
+    # менеджер (уже подгружен через selectinload)
+    manager_obj = None
+    if employee.manager:
+        manager_obj = ManagerInfo(
+            id=employee.manager.id,
+            first_name=employee.manager.first_name,
+            last_name=employee.manager.last_name,
+            title=employee.manager.title,
+        )
+
+    # орг-юнит (уже подгружен)
+    org_unit_obj = None
+    if employee.lowest_org_unit:
+        org_unit_obj = OrgUnitInfo(
+            id=employee.lowest_org_unit.id,
+            name=employee.lowest_org_unit.name,
+            unit_type=employee.lowest_org_unit.unit_type,
+        )
+
+    return EmployeeDetail(
+        id=employee.id,
+        email=employee.email,
+        first_name=employee.first_name,
+        middle_name=employee.middle_name,
+        last_name=employee.last_name,
+        title=employee.title,
+        status=employee.status,
+        work_city=employee.work_city,
+        work_format=employee.work_format,
+        time_zone=employee.time_zone,
+        bio=employee.bio,
+        hire_date=employee.hire_date,
+        is_admin=bool(employee.is_admin),
+        is_blocked=bool(employee.is_blocked),
+        last_login_at=employee.last_login_at,
+        manager=manager_obj,
+        org_unit=org_unit_obj,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Список сотрудников (краткая информация)
 # ---------------------------------------------------------------------------
 @router.get("/", response_model=list[EmployeePublic])
 async def list_employees(session: AsyncSession = Depends(get_async_session)):
     try:
-        q = (
-            select(
-                Employee.id,
-                Employee.first_name,
-                Employee.last_name,
-                Employee.email,
-                Employee.title,
-                Employee.status,
-            )
-            .where(Employee.status == "active")
-            .order_by(asc(Employee.last_name), asc(Employee.first_name))
-        )
-        rows = (await session.execute(q)).all()
-
+        employees = await get_all_employees(session)
         return [
             {
-                "id": row.id,
-                "first_name": row.first_name,
-                "last_name": row.last_name,
-                "email": row.email,
-                "title": row.title,
-                "status": row.status,
+                "id": e.id,
+                "first_name": e.first_name,
+                "middle_name": e.middle_name,   # добавили для симметрии со схемой
+                "last_name": e.last_name,
+                "email": e.email,
+                "title": e.title,
+                "status": e.status,
             }
-            for row in rows
+            for e in employees
         ]
     except Exception as e:
         raise HTTPException(
@@ -64,6 +101,7 @@ async def list_employees(session: AsyncSession = Depends(get_async_session)):
             ).model_dump(),
         )
 
+
 # ---------------------------------------------------------------------------
 # Подробная карточка сотрудника
 # ---------------------------------------------------------------------------
@@ -72,12 +110,7 @@ async def get_employee(
     employee_id: int,
     session: AsyncSession = Depends(get_async_session),
 ):
-    # 1) сам сотрудник
-    emp_row = await session.execute(
-        select(Employee).where(Employee.id == employee_id)
-    )
-    employee: Employee | None = emp_row.scalar_one_or_none()
-
+    employee = await get_employee_with_refs(session, employee_id)
     if employee is None:
         raise HTTPException(
             status_code=404,
@@ -87,71 +120,60 @@ async def get_employee(
                 status=404,
             ).model_dump(),
         )
+    return await _build_employee_detail(employee)
 
-    # 2) менеджер (если есть)
-    manager_obj = None
-    if employee.manager_id:
-        mgr_row = await session.execute(
-            select(
-                Employee.id,
-                Employee.first_name,
-                Employee.last_name,
-                Employee.title,
-            ).where(Employee.id == employee.manager_id)
-        )
-        mgr = mgr_row.one_or_none()
-        if mgr:
-            manager_obj = ManagerInfo(
-                id=mgr.id,
-                first_name=mgr.first_name,
-                last_name=mgr.last_name,
-                title=mgr.title,
-            )
 
-    # 3) орг-юнит (используем lowest_org_unit_id из модели Employee)
-    org_unit_obj = None
-    if employee.lowest_org_unit_id:
-        ou_row = await session.execute(
-            select(
-                OrgUnit.id,
-                OrgUnit.name,
-                OrgUnit.unit_type,
-            ).where(OrgUnit.id == employee.lowest_org_unit_id)
-        )
-        ou = ou_row.one_or_none()
-        if ou:
-            org_unit_obj = OrgUnitInfo(
-                id=ou.id,
-                name=ou.name,
-                unit_type=ou.unit_type,
-            )
+# ---------------------------------------------------------------------------
+# PATCH /me — пользователь обновляет свои поля
+# ---------------------------------------------------------------------------
+@router.patch("/me", response_model=EmployeeDetail)
+async def update_me(
+    payload: EmployeeSelfUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Employee = Depends(get_current_user),
+):
+    changed = await apply_self_update(session, current_user, payload.model_dump(exclude_unset=True))
+    if changed:
+        await session.commit()
+        await session.refresh(current_user)
+    return await _build_employee_detail(current_user)
 
-    # 4) формируем ответ (без команд и прочего лишнего)
-    try:
-        return EmployeeDetail(
-            id=employee.id,
-            email=employee.email,
-            first_name=employee.first_name,
-            last_name=employee.last_name,
-            title=employee.title,
-            status=employee.status,
-            work_city=employee.work_city,
-            work_format=employee.work_format,
-            time_zone=employee.time_zone,
-            bio=employee.bio,
-            hire_date=employee.hire_date,
-            is_admin=bool(employee.is_admin),
-            is_blocked=bool(employee.is_blocked),
-            last_login_at=employee.last_login_at,
-            manager=manager_obj,
-            org_unit=org_unit_obj,
-        )
-    except Exception as e:
+
+# ---------------------------------------------------------------------------
+# PATCH /employees/{employee_id} — админ обновляет пользователя
+# ---------------------------------------------------------------------------
+@router.patch("/{employee_id}", response_model=EmployeeDetail)
+async def admin_update_employee(
+    employee_id: int,
+    payload: EmployeeAdminUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Employee = Depends(get_current_user),
+):
+    if not current_user.is_admin:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=ErrorResponse.single(
-                code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to build employee detail: {e}",
-                status=500,
+                code=ErrorCode.AUTH_FORBIDDEN,
+                message="Admin privileges required",
+                status=403,
             ).model_dump(),
         )
+
+    # грузим с отношениями, чтобы вернуть полную карточку после обновления
+    target = await get_employee_with_refs(session, employee_id)
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.single(
+                code=ErrorCode.NOT_FOUND,
+                message="Employee not found",
+                status=404,
+            ).model_dump(),
+        )
+
+    changed = await apply_admin_update(session, target, payload.model_dump(exclude_unset=True))
+    if changed:
+        await session.commit()
+        await session.refresh(target)
+
+    return await _build_employee_detail(target)

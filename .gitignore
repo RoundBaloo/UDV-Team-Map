@@ -125,3 +125,79 @@ Thumbs.db
 
 # macOS resource forks (иногда появляются)
 ._*
+
+# --- Alembic (разовые/временные ревизии) ---
+# Миграции должны коммититься, но экспериментальные «пробы» лучше не держать.
+alembic/versions/*probe*.py
+alembic/versions/*tmp*.py
+alembic/versions/*sandbox*.py
+
+# SQL дампы/бэкапы
+*.sql
+*.dump
+
+# Временные результаты/отчёты утилит
+reports/
+*.out
+*.tmp
+
+# ------------------------
+# Secrets / keys (никогда в git)
+# ------------------------
+*.pem
+*.key
+*.p12
+*.crt
+*.cer
+id_rsa*
+id_ed25519*
+*.keystore
+
+# service account / cloud creds (наш packer-key.json и подобные)
+*service-account*-key*.json
+*sa-key*.json
+*cred*.json
+packer-key.json
+
+# ------------------------
+# Packer
+# ------------------------
+packer_cache/
+.packer.d/
+*.pkrvars.hcl
+*.auto.pkrvars.hcl
+# (HCL шаблоны *.pkr.hcl оставляем в репо)
+
+# ------------------------
+# Docker / local runtime
+# ------------------------
+.docker/
+docker-data/
+volumes/
+docker-compose.override*.yml
+
+# ------------------------
+# Media / uploads (локальные файлы пользователей)
+# ------------------------
+media/
+app/media/
+app/static/uploads/
+
+# ------------------------
+# Test artifacts & reports
+# ------------------------
+junit.xml
+.benchmarks/
+
+# ------------------------
+# Pre-commit / tooling caches
+# ------------------------
+.pre-commit-cache/
+.pre-commit-config.yaml~  # случайные бэкапы
+
+# ------------------------
+# Editors / IDE (добавки)
+# ------------------------
+*.iml
+.history/
+desktop.ini

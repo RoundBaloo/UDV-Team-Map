@@ -3,33 +3,39 @@
     "external_ref": "E1001",
     "email": "ivan.petrov@example.com",
     "first_name": "Иван",
+    "middle_name": "Петрович",
     "last_name": "Петров",
     "title": "Backend Developer",
     "manager_external_ref": "E1003",
     "company": "UDV Group",
     "department": "Платформа",
+    "is_admin": false,
     "password_hash": "$2b$12$6s6Vmh7eyXW6zJgbJ0eDye4uz9uzxWzPzqK1.NDEqjMbBgH5bW5La"
   },
   {
     "external_ref": "E1002",
     "email": "pavel.sidorov@example.com",
     "first_name": "Павел",
+    "middle_name": "Алексеевич",
     "last_name": "Сидоров",
     "title": "QA Engineer",
     "manager_external_ref": "E1003",
     "company": "UDV Group",
     "department": "Тестирование",
+    "is_admin": false,
     "password_hash": "$2b$12$ZB2G0N9f1uAPPRxhqW3SWuM7qzVblbt6x5kbQJ3P3g6ZYb.TCv56G"
   },
   {
     "external_ref": "E1003",
     "email": "maria.ivanova@example.com",
     "first_name": "Мария",
+    "middle_name": "Владимировна",
     "last_name": "Иванова",
     "title": "Product Manager",
     "manager_external_ref": null,
     "company": "UDV Group",
     "department": "Продукты",
+    "is_admin": true,
     "password_hash": "$2b$12$QxOCPk8Gtny4p8ItA7f3DObDTqWzT5hZJb6omr60Xe3UZuzM8jRx6"
   }
 ]
