@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, date
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict, PositiveInt
+from app.schemas.media import MediaInfo
 
 
 class ManagerInfo(BaseModel):
@@ -52,6 +53,7 @@ class EmployeeDetail(BaseModel):
     is_blocked: bool = False
     last_login_at: Optional[datetime] = None
 
+    photo: Optional[MediaInfo] = None
     manager: Optional[ManagerInfo] = None
     org_unit: Optional[OrgUnitInfo] = None
 

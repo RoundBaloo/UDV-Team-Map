@@ -23,6 +23,8 @@ from app.services.employee_service import (
     apply_self_update,
     apply_admin_update,
 )
+from app.services.media_service import resolve_media_public_url
+from app.schemas.media import MediaInfo
 from app.schemas.common import ErrorResponse, ErrorCode
 
 router = APIRouter(
@@ -31,7 +33,7 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-async def _build_employee_detail(employee: Employee) -> EmployeeDetail:
+async def _build_employee_detail(employee: Employee, session: AsyncSession) -> EmployeeDetail:
     # менеджер (уже подгружен через selectinload)
     manager_obj = None
     if employee.manager:
@@ -51,6 +53,14 @@ async def _build_employee_detail(employee: Employee) -> EmployeeDetail:
             unit_type=employee.lowest_org_unit.unit_type,
         )
 
+    # фото
+    photo_obj = None
+    pid = getattr(employee, "photo_id", None)
+    if pid:
+        url = await resolve_media_public_url(session, pid)
+        if url:
+            photo_obj = MediaInfo(id=pid, public_url=url)
+
     return EmployeeDetail(
         id=employee.id,
         email=employee.email,
@@ -67,6 +77,8 @@ async def _build_employee_detail(employee: Employee) -> EmployeeDetail:
         is_admin=bool(employee.is_admin),
         is_blocked=bool(employee.is_blocked),
         last_login_at=employee.last_login_at,
+        photo_id=employee.photo_id,
+        photo=photo_obj,
         manager=manager_obj,
         org_unit=org_unit_obj,
     )
@@ -120,7 +132,7 @@ async def get_employee(
                 status=404,
             ).model_dump(),
         )
-    return await _build_employee_detail(employee)
+    return await _build_employee_detail(employee, session)
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +148,7 @@ async def update_me(
     if changed:
         await session.commit()
         await session.refresh(current_user)
-    return await _build_employee_detail(current_user)
+    return await _build_employee_detail(current_user, session)
 
 
 # ---------------------------------------------------------------------------
@@ -176,4 +188,4 @@ async def admin_update_employee(
         await session.commit()
         await session.refresh(target)
 
-    return await _build_employee_detail(target)
+    return await _build_employee_detail(target, session)
