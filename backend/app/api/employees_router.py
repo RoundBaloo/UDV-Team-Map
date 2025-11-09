@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, asc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+import asyncio
 
 from app.db.session import get_async_session
 from app.core.security import get_current_user
 from app.models.employee import Employee
-from app.models.org_unit import OrgUnit
 from app.schemas.employee import (
     EmployeePublic,
     EmployeeDetail,
@@ -19,7 +20,7 @@ from app.schemas.employee import (
 )
 from app.services.employee_service import (
     get_all_employees,
-    get_employee_with_refs,
+    get_employee_with_refs,  # можно оставить для других мест, здесь не обязателен
     apply_self_update,
     apply_admin_update,
 )
@@ -33,86 +34,100 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-async def _build_employee_detail(employee: Employee, session: AsyncSession) -> EmployeeDetail:
-    # менеджер (уже подгружен через selectinload)
+async def _build_employee_detail_by_id(employee_id: int, session: AsyncSession) -> EmployeeDetail:
+    db_emp = (
+        await session.execute(
+            select(Employee)
+            .where(Employee.id == employee_id)
+            .options(
+                selectinload(Employee.manager),
+                selectinload(Employee.lowest_org_unit),
+            )
+        )
+    ).scalar_one_or_none()
+
+    if db_emp is None:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.single(
+                code=ErrorCode.NOT_FOUND,
+                message="Employee not found",
+                status=404,
+            ).model_dump(),
+        )
+
     manager_obj = None
-    if employee.manager:
+    if db_emp.manager:
         manager_obj = ManagerInfo(
-            id=employee.manager.id,
-            first_name=employee.manager.first_name,
-            last_name=employee.manager.last_name,
-            title=employee.manager.title,
+            id=db_emp.manager.id,
+            first_name=db_emp.manager.first_name,
+            last_name=db_emp.manager.last_name,
+            title=db_emp.manager.title,
         )
 
-    # орг-юнит (уже подгружен)
     org_unit_obj = None
-    if employee.lowest_org_unit:
+    if db_emp.lowest_org_unit:
         org_unit_obj = OrgUnitInfo(
-            id=employee.lowest_org_unit.id,
-            name=employee.lowest_org_unit.name,
-            unit_type=employee.lowest_org_unit.unit_type,
+            id=db_emp.lowest_org_unit.id,
+            name=db_emp.lowest_org_unit.name,
+            unit_type=db_emp.lowest_org_unit.unit_type,
         )
 
-    # фото
     photo_obj = None
-    pid = getattr(employee, "photo_id", None)
+    pid = getattr(db_emp, "photo_id", None)
     if pid:
         url = await resolve_media_public_url(session, pid)
         if url:
             photo_obj = MediaInfo(id=pid, public_url=url)
 
     return EmployeeDetail(
-        id=employee.id,
-        email=employee.email,
-        first_name=employee.first_name,
-        middle_name=employee.middle_name,
-        last_name=employee.last_name,
-        title=employee.title,
-        status=employee.status,
-        work_city=employee.work_city,
-        work_format=employee.work_format,
-        time_zone=employee.time_zone,
-        bio=employee.bio,
-        hire_date=employee.hire_date,
-        is_admin=bool(employee.is_admin),
-        is_blocked=bool(employee.is_blocked),
-        last_login_at=employee.last_login_at,
-        photo_id=employee.photo_id,
+        id=db_emp.id,
+        email=db_emp.email,
+        first_name=db_emp.first_name,
+        middle_name=db_emp.middle_name,
+        last_name=db_emp.last_name,
+        title=db_emp.title,
+        status=db_emp.status,
+        work_city=db_emp.work_city,
+        work_format=db_emp.work_format,
+        time_zone=db_emp.time_zone,
+        work_phone=db_emp.work_phone,
+        mattermost_handle=db_emp.mattermost_handle,
+        birth_date=db_emp.birth_date,
+        hire_date=db_emp.hire_date,
+        bio=db_emp.bio,
+        skill_ratings=db_emp.skill_ratings,
+        is_admin=bool(db_emp.is_admin),
+        is_blocked=bool(db_emp.is_blocked),
+        last_login_at=db_emp.last_login_at,
         photo=photo_obj,
         manager=manager_obj,
         org_unit=org_unit_obj,
     )
 
+@router.get("/me", response_model=EmployeeDetail)
+async def get_me(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Employee = Depends(get_current_user),
+):
+    return await _build_employee_detail_by_id(current_user.id, session)
 
 # ---------------------------------------------------------------------------
-# Список сотрудников (краткая информация)
+# Список сотрудников (полные карточки)
 # ---------------------------------------------------------------------------
-@router.get("/", response_model=list[EmployeePublic])
+@router.get("/", response_model=list[EmployeeDetail])
 async def list_employees(session: AsyncSession = Depends(get_async_session)):
-    try:
-        employees = await get_all_employees(session)
-        return [
-            {
-                "id": e.id,
-                "first_name": e.first_name,
-                "middle_name": e.middle_name,   # добавили для симметрии со схемой
-                "last_name": e.last_name,
-                "email": e.email,
-                "title": e.title,
-                "status": e.status,
-            }
-            for e in employees
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=ErrorResponse.single(
-                code=ErrorCode.INTERNAL_ERROR,
-                message=f"Unexpected error: {e}",
-                status=500,
-            ).model_dump(),
-        )
-
+    result = await session.execute(
+        select(Employee.id)
+        .where(Employee.status == "active")
+        .order_by(Employee.last_name.asc(), Employee.first_name.asc())
+    )
+    ids = [row[0] for row in result.all()]
+    # Параллельно собираем полные карточки
+    items = await asyncio.gather(*[
+        _build_employee_detail_by_id(eid, session) for eid in ids
+    ])
+    return items
 
 # ---------------------------------------------------------------------------
 # Подробная карточка сотрудника
@@ -122,18 +137,7 @@ async def get_employee(
     employee_id: int,
     session: AsyncSession = Depends(get_async_session),
 ):
-    employee = await get_employee_with_refs(session, employee_id)
-    if employee is None:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.single(
-                code=ErrorCode.NOT_FOUND,
-                message="Employee not found",
-                status=404,
-            ).model_dump(),
-        )
-    return await _build_employee_detail(employee, session)
-
+    return await _build_employee_detail_by_id(employee_id, session)
 
 # ---------------------------------------------------------------------------
 # PATCH /me — пользователь обновляет свои поля
@@ -147,9 +151,9 @@ async def update_me(
     changed = await apply_self_update(session, current_user, payload.model_dump(exclude_unset=True))
     if changed:
         await session.commit()
-        await session.refresh(current_user)
-    return await _build_employee_detail(current_user, session)
-
+    # важный момент: не трогаем ленивые связи current_user,
+    # а делаем рефетч через билдер
+    return await _build_employee_detail_by_id(current_user.id, session)
 
 # ---------------------------------------------------------------------------
 # PATCH /employees/{employee_id} — админ обновляет пользователя
@@ -171,8 +175,13 @@ async def admin_update_employee(
             ).model_dump(),
         )
 
-    # грузим с отношениями, чтобы вернуть полную карточку после обновления
-    target = await get_employee_with_refs(session, employee_id)
+    target = await (
+        session.execute(
+            select(Employee)
+            .where(Employee.id == employee_id)
+        )
+    )
+    target = target.scalar_one_or_none()
     if target is None:
         raise HTTPException(
             status_code=404,
@@ -186,6 +195,6 @@ async def admin_update_employee(
     changed = await apply_admin_update(session, target, payload.model_dump(exclude_unset=True))
     if changed:
         await session.commit()
-        await session.refresh(target)
 
-    return await _build_employee_detail(target, session)
+    # как и выше — рефетч с eager загрузкой
+    return await _build_employee_detail_by_id(employee_id, session)

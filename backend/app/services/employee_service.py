@@ -4,7 +4,7 @@ from typing import List, Optional, Iterable
 from sqlalchemy import select
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, load_only
+from sqlalchemy.orm import selectinload
 
 from app.schemas.common import ErrorResponse, ErrorCode
 from app.models.media import Media
@@ -37,25 +37,17 @@ def _sanitize_payload(payload: dict) -> dict:
 async def get_all_employees(session: AsyncSession) -> List[Employee]:
     """
     Активные сотрудники, отсортированные по фамилии/имени.
+    Предзагружаем manager и lowest_org_unit, чтобы избежать N+1 и MissingGreenlet.
     """
-    query = (
+    res = await session.execute(
         select(Employee)
         .where(Employee.status == "active")
-        .order_by(Employee.last_name.asc(), Employee.first_name.asc())
-        # список не требует связей
         .options(
-            load_only(
-                Employee.id,
-                Employee.first_name,
-                Employee.middle_name,
-                Employee.last_name,
-                Employee.email,
-                Employee.title,
-                Employee.status,
-            )
+            selectinload(Employee.manager),
+            selectinload(Employee.lowest_org_unit),
         )
+        .order_by(Employee.last_name.asc(), Employee.first_name.asc(), Employee.id.asc())
     )
-    res = await session.execute(query)
     return list(res.scalars().all())
 
 

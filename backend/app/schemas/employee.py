@@ -31,7 +31,7 @@ class EmployeePublic(BaseModel):
 
 
 class EmployeeDetail(BaseModel):
-    """Полная карточка сотрудника (без команд и лишнего)."""
+    """Полная карточка сотрудника для клиентского API."""
     id: int
     email: str
 
@@ -45,10 +45,14 @@ class EmployeeDetail(BaseModel):
     work_format: Optional[str] = None
     time_zone: Optional[str] = None
 
-    bio: Optional[str] = None
-    hire_date: Optional[date] = None
+    work_phone: Optional[str] = None
+    mattermost_handle: Optional[str] = None
 
-    # оставляем дефолты, чтобы не спотыкаться, если БД/ORM вдруг не проставит
+    birth_date: Optional[date] = None
+    hire_date: Optional[date] = None
+    bio: Optional[str] = None
+    skill_ratings: Optional[Dict[str, Any]] = None
+
     is_admin: bool = False
     is_blocked: bool = False
     last_login_at: Optional[datetime] = None

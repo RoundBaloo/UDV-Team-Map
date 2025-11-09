@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
@@ -13,8 +13,7 @@ from app.schemas.photo_moderation import (
     PhotoModerationItem,
     ModerationList,
     CreateModerationRequestMe,
-    CreateModerationRequestAdmin,
-    RejectPayload,
+    DecisionPayload,
     MyModerationStatus,
 )
 from app.services.photo_moderation_service import (
@@ -23,7 +22,7 @@ from app.services.photo_moderation_service import (
     approve,
     reject,
     get_latest_for_employee,
-    NotFound, BadRequest,
+    NotFound, BadRequest, Conflict,
 )
 from app.services.media_service import resolve_media_public_url
 
@@ -90,122 +89,53 @@ async def create_my_request(
             ).model_dump(),
         )
 
-# --- Админ/HR: создать/заменить заявку для любого сотрудника ---
-@router.post("/requests", response_model=PhotoModerationItem, status_code=201)
-async def create_request_admin(
-    payload: CreateModerationRequestAdmin,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: Employee = Depends(get_current_user),
-):
-    _ensure_admin(current_user)
-    try:
-        pm = await create_or_replace_request_for_employee(session, payload.employee_id, payload.media_id)
-        await session.commit()
-        return await _to_item(pm, session)
-    except NotFound as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.single(
-                code=ErrorCode.NOT_FOUND,
-                message=str(e),
-                status=404,
-            ).model_dump(),
-        )
-    except BadRequest as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.single(
-                code=ErrorCode.BAD_REQUEST,
-                message=str(e),
-                status=400,
-            ).model_dump(),
-        )
 
 # --- Админ/HR: список pending ---
 @router.get("/pending", response_model=ModerationList)
 async def get_pending(
-    employee_id: int | None = Query(default=None, gt=0),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_async_session),
     current_user: Employee = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    items, total = await list_pending(session, employee_id=employee_id, limit=limit, offset=offset)
-    return ModerationList(
-        items=[await _to_item(pm, session) for pm in items],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+    items = await list_pending(session)
+    return ModerationList(items=[await _to_item(pm, session) for pm in items])
 
-# --- Админ/HR: апрув ---
-@router.post("/{moderation_id}/approve", response_model=PhotoModerationItem)
-async def approve_request(
+# --- Админ/HR: апрув/режект ---
+@router.post("/{moderation_id}/decision", response_model=PhotoModerationItem)
+async def decide_request(
     moderation_id: int = Path(..., gt=0),
+    payload: DecisionPayload = ...,
     session: AsyncSession = Depends(get_async_session),
     current_user: Employee = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
     try:
-        pm = await approve(session, moderation_id=moderation_id, reviewer_id=current_user.id)
+        if payload.decision == "approve":
+            pm = await approve(session, moderation_id=moderation_id, reviewer_id=current_user.id)
+        else:
+            pm = await reject(session, moderation_id=moderation_id, reviewer_id=current_user.id, reason=payload.reason or "")
         await session.commit()
         return await _to_item(pm, session)
+    
     except NotFound as e:
         await session.rollback()
         raise HTTPException(
             status_code=404,
-            detail=ErrorResponse.single(
-                code=ErrorCode.NOT_FOUND,
-                message=str(e),
-                status=404,
-            ).model_dump(),
+            detail=ErrorResponse.single(ErrorCode.NOT_FOUND, str(e), 404).model_dump(),
         )
+    
+    except Conflict as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse.single(code=ErrorCode.CONFLICT, message=str(e), status=409).model_dump(),
+        )
+    
     except BadRequest as e:
         await session.rollback()
         raise HTTPException(
             status_code=400,
-            detail=ErrorResponse.single(
-                code=ErrorCode.BAD_REQUEST,
-                message=str(e),
-                status=400,
-            ).model_dump(),
-        )
-
-# --- Админ/HR: реджект ---
-@router.post("/{moderation_id}/reject", response_model=PhotoModerationItem)
-async def reject_request(
-    moderation_id: int = Path(..., gt=0),
-    payload: RejectPayload = ...,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: Employee = Depends(get_current_user),
-):
-    _ensure_admin(current_user)
-    try:
-        pm = await reject(session, moderation_id=moderation_id, reviewer_id=current_user.id, reason=payload.reason)
-        await session.commit()
-        return await _to_item(pm, session)
-    except NotFound as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.single(
-                code=ErrorCode.NOT_FOUND,
-                message=str(e),
-                status=404,
-            ).model_dump(),
-        )
-    except BadRequest as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.single(
-                code=ErrorCode.BAD_REQUEST,
-                message=str(e),
-                status=400,
-            ).model_dump(),
+            detail=ErrorResponse.single(ErrorCode.BAD_REQUEST, str(e), 400).model_dump(),
         )
 
 # --- Пользователь: статус своей последней заявки ---

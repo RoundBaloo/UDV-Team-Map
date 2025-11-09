@@ -85,31 +85,16 @@ async def get_latest_for_employee(session: AsyncSession, employee_id: int) -> Op
     return res.scalar_one_or_none()
 
 
-async def list_pending(
-    session: AsyncSession,
-    *,
-    employee_id: Optional[int] = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> Tuple[List[PhotoModeration], int]:
+async def list_pending(session: AsyncSession) -> tuple[list[PhotoModeration], int]:
     """
     Список всех pending (для HR/админа), опционально по сотруднику.
     """
-    base = select(PhotoModeration).where(PhotoModeration.status == "pending")
-    cnt = select(func.count()).select_from(PhotoModeration).where(PhotoModeration.status == "pending")
-
-    if employee_id:
-        base = base.where(PhotoModeration.employee_id == employee_id)
-        cnt = cnt.where(PhotoModeration.employee_id == employee_id)
-
-    total = (await session.execute(cnt)).scalar_one()
-    rows = (
-        await session.execute(
-            base.order_by(PhotoModeration.created_at.asc()).limit(limit).offset(offset)
-        )
-    ).scalars().all()
-
-    return list(rows), int(total)
+    rows = (await session.execute(
+        select(PhotoModeration)
+        .where(PhotoModeration.status == "pending")
+        .order_by(PhotoModeration.created_at.asc())
+    )).scalars().all()
+    return rows
 
 
 async def approve(
@@ -122,7 +107,6 @@ async def approve(
     HR/админ подтверждает: статус -> approved, фиксируем reviewer + reviewed_at,
     и присваиваем сотруднику avatar: employee.photo_id = media_id.
     """
-    # 1) грузим заявку
     pm = await _get_by_id(session, moderation_id)
     if not pm:
         raise NotFound("Moderation request not found")
@@ -130,17 +114,14 @@ async def approve(
     if pm.status != "pending":
         raise Conflict("Request is not pending (already processed)")
 
-    # 2) грузим сотрудника
     employee = (await session.execute(
         select(Employee).where(Employee.id == pm.employee_id)
     )).scalar_one_or_none()
     if not employee:
         raise NotFound("Employee not found")
 
-    # 3) запоминаем старое фото (если было)
     old_photo_id = employee.photo_id
 
-    # 4) применяем новый аватар
     employee.photo_id = pm.media_id
     pm.status = "approved"
     pm.reviewer_employee_id = reviewer_id
@@ -149,16 +130,12 @@ async def approve(
     session.add(employee)
     session.add(pm)
 
-    # 5) фиксируем изменения в БД (чтобы не было FK на старое media)
     await session.flush()
 
-    # 6) после успешного flush — чистим старое фото (и запись media),
-    #    если старое было и оно отличается от нового
     if old_photo_id and old_photo_id != pm.media_id:
         try:
             await delete_media_and_object_by_id(session, old_photo_id)
         except Exception:
-            # не мешаем успешному апруву — просто не удалили старый объект
             pass
 
     return pm

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, model_validator
 from app.schemas.media import MediaInfo
 
 class PhotoModerationItem(BaseModel):
@@ -17,18 +17,19 @@ class PhotoModerationItem(BaseModel):
 class CreateModerationRequestMe(BaseModel):
     media_id: int = Field(..., gt=0)
 
-class CreateModerationRequestAdmin(BaseModel):
-    employee_id: int = Field(..., gt=0)
-    media_id: int = Field(..., gt=0)
+class DecisionPayload(BaseModel):
+    decision: str = Field(..., pattern="^(approve|reject)$")
+    reason: str | None = None
 
-class RejectPayload(BaseModel):
-    reason: str = Field(..., min_length=1, max_length=2000)
+    @model_validator(mode="after")
+    def _check_reason(self):
+        if self.decision == "reject":
+            if not (self.reason and self.reason.strip()):
+                raise ValueError("Reject decision requires non-empty reason")
+        return self
 
 class ModerationList(BaseModel):
     items: list[PhotoModerationItem]
-    total: int
-    limit: int
-    offset: int
 
 class MyModerationStatus(BaseModel):
     has_request: bool
