@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
 from app.db.session import get_async_session
+from app.utils.encoding import validate_utf8_or_raise
 
 from app.services.org_unit_service import build_org_tree
-from app.services.org_unit_service import get_employees_of_unit
 from app.services.media_service import resolve_media_public_url
+from app.services.employee_service import search_employees
 
 from app.schemas.org_structure import OrgNode
 from app.schemas.employee import EmployeeDetail, ManagerInfo, OrgUnitInfo
@@ -38,13 +39,11 @@ async def get_org_structure(
 @router.get("/{org_unit_id}/employees", response_model=List[EmployeeDetail])
 async def list_unit_employees(
     org_unit_id: int = Path(..., gt=0),
+    q: str | None = Query(None, description="Поисковая строка; если пусто — просто список юнита"),
     session: AsyncSession = Depends(get_async_session),
     _: Employee = Depends(get_current_user),
 ):
-    employees = await get_employees_of_unit(session, org_unit_id=org_unit_id, active_only=True)
-
     async def _to_detail(e: Employee) -> EmployeeDetail:
-        # manager
         manager_obj = None
         if e.manager:
             manager_obj = ManagerInfo(
@@ -54,7 +53,6 @@ async def list_unit_employees(
                 title=e.manager.title,
             )
 
-        # org_unit
         org_unit_obj = None
         if e.lowest_org_unit:
             org_unit_obj = OrgUnitInfo(
@@ -63,7 +61,6 @@ async def list_unit_employees(
                 unit_type=e.lowest_org_unit.unit_type,
             )
 
-        # photo
         photo_obj = None
         if e.photo_id:
             url = await resolve_media_public_url(session, e.photo_id)
@@ -94,9 +91,37 @@ async def list_unit_employees(
             manager=manager_obj,
             org_unit=org_unit_obj,
         )
-
+    
+    validate_utf8_or_raise(q)
     try:
-        return await asyncio.gather(*[ _to_detail(e) for e in employees ])
+        # 1) получаем список найденных (в правильном порядке по рангу/похожести)
+        employees = await search_employees(session=session, q=q, org_unit_id=org_unit_id)
+        ids = [e.id for e in employees]
+        if not ids:
+            return []
+
+        # 2) рефетчим полные сущности одним запросом с eager-загрузкой связей
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from app.models.employee import Employee
+
+        full_rows = await session.execute(
+            select(Employee)
+            .where(Employee.id.in_(ids))
+            .options(
+                selectinload(Employee.manager),
+                selectinload(Employee.lowest_org_unit),
+            )
+        )
+        by_id = {e.id: e for e in full_rows.scalars().all()}
+
+        # 3) собираем ответ строго в исходном порядке ids (сохраняем сортировку поиска)
+        items: list[EmployeeDetail] = []
+        for eid in ids:
+            e = by_id.get(eid)
+            if e is not None:
+                items.append(await _to_detail(e))
+        return items
     except Exception as ex:
         raise HTTPException(
             status_code=500,

@@ -70,8 +70,7 @@ async def build_org_tree(session: AsyncSession) -> OrgNode:
 
 
 async def get_employees_of_unit(
-    session: AsyncSession,
-    *,
+    session,
     org_unit_id: int,
     active_only: bool = True,
 ) -> List[Employee]:
@@ -89,6 +88,5 @@ async def get_employees_of_unit(
     )
     if active_only:
         stmt = stmt.where(Employee.status == "active")
-
-    res = await session.execute(stmt.order_by(Employee.last_name.asc(), Employee.first_name.asc()))
-    return list(res.scalars().all())
+    result = await session.execute(stmt.order_by(Employee.last_name.asc(), Employee.first_name.asc()))
+    return result.scalars().all()

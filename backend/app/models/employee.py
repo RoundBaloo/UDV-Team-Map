@@ -150,6 +150,20 @@ class Employee(Base):
         foreign_keys="Employee.manager_id",
     )
 
+    search_text_norm: Mapped[str | None] = mapped_column(
+    Text,
+    Computed(text("""
+        unaccent(lower(
+          coalesce(first_name,'') || ' ' ||
+          coalesce(middle_name,'') || ' ' ||
+          coalesce(last_name,'') || ' ' ||
+          coalesce(title,'') || ' ' ||
+          coalesce(bio,'')
+        ))
+    """), persisted=True),
+    nullable=True,
+)
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('active','dismissed')",

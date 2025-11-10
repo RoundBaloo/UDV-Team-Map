@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import List, Optional, Iterable
+from typing import List, Optional, Iterable, Sequence
 
-from sqlalchemy import select
+import re
+from sqlalchemy import func, or_, select, literal
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,6 +11,14 @@ from app.schemas.common import ErrorResponse, ErrorCode
 from app.models.media import Media
 from app.models.employee import Employee
 from app.models.org_unit import OrgUnit
+
+# ---------------------------------------------------------------------------
+# Search tuning constants
+# ---------------------------------------------------------------------------
+SEARCH_DEFAULT_LIMIT: int = 10
+TRGM_SIM_THRESHOLD: float = 0.25
+
+
 
 async def _validate_fk_media(session: AsyncSession, payload: dict):
     """Если прислали photo_id != None — проверим, что такая media существует."""
@@ -27,12 +36,14 @@ async def _validate_fk_media(session: AsyncSession, payload: dict):
                 ).model_dump(),
             )
 
+
 def _sanitize_payload(payload: dict) -> dict:
     clean = dict(payload)
     if "photo_id" in clean and clean["photo_id"] == 0:
         # на всякий — если вдруг обойдут Pydantic
         clean.pop("photo_id", None)
     return clean
+
 
 async def get_all_employees(session: AsyncSession) -> List[Employee]:
     """
@@ -135,3 +146,62 @@ async def apply_admin_update(session: AsyncSession, user: Employee, payload: dic
     if changed:
         session.add(user)
     return changed
+
+
+async def search_employees(
+    session: AsyncSession,
+    q: Optional[str] = None,
+    org_unit_id: Optional[int] = None,
+) -> List[Employee]:
+    """
+    - без q: активные сотрудники, сортировка по ФИО
+    - с q: (FTS OR trigram) и ранжирование: FTS сверху, затем по similarity, затем ФИО
+    """
+    base = select(Employee).where(Employee.status == "active")
+
+    if org_unit_id is not None:
+        base = base.where(Employee.lowest_org_unit_id == org_unit_id)
+
+    # без запроса — классический список
+    if not q or not q.strip():
+        base = base.order_by(Employee.last_name.asc(), Employee.first_name.asc())
+        return (await session.execute(base)).scalars().all()
+
+    # --- поиск ---
+    q_raw = q.strip()
+
+    # FTS по russian словарю
+    tsq = func.websearch_to_tsquery('russian', q_raw)
+    ts_match = Employee.search_tsv.op('@@')(tsq)
+    ts_rank = func.ts_rank_cd(Employee.search_tsv, tsq)
+
+    # НОРМАЛИЗУЕМ запрос на стороне БД (как и поле): unaccent(lower(q))
+    normalized_q = func.unaccent(func.lower(literal(q_raw)))
+
+    # НОРМАЛИЗОВАННЫЕ поля (совпадают с логикой search_text_norm)
+    lname = func.unaccent(func.lower(func.coalesce(Employee.last_name, '')))
+    fname = func.unaccent(func.lower(func.coalesce(Employee.first_name, '')))
+    title = func.unaccent(func.lower(func.coalesce(Employee.title, '')))
+    blob  = func.coalesce(Employee.search_text_norm, '')
+
+    # similarity: берём максимум совпадения по полям
+    sim_any = func.greatest(
+        func.similarity(lname, normalized_q),
+        func.similarity(fname, normalized_q),
+        func.similarity(title, normalized_q),
+        func.similarity(blob,  normalized_q),
+    )
+
+    # фильтр: FTS или мягкий trigram-порог
+    base = base.where(or_(ts_match, sim_any >= TRGM_SIM_THRESHOLD))
+
+    # сортировка: FTS сначала (match→rank), потом по similarity, затем ФИО
+    base = base.order_by(
+        ts_match.desc(),
+        ts_rank.desc(),
+        sim_any.desc(),
+        Employee.last_name.asc(),
+        Employee.first_name.asc(),
+    ).limit(SEARCH_DEFAULT_LIMIT)
+
+    return (await session.execute(base)).scalars().all()

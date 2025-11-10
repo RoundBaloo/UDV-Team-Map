@@ -1,32 +1,32 @@
-# app/api/v1/employees_router.py
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-import asyncio
 
+from app.utils.encoding import validate_utf8_or_raise
 from app.db.session import get_async_session
 from app.core.security import get_current_user
 from app.models.employee import Employee
+
+from app.services.employee_service import (
+    search_employees,          # ← единый поиск (FTS + опечатки)
+    apply_self_update,
+    apply_admin_update,
+)
+from app.services.media_service import resolve_media_public_url
+
+from app.schemas.media import MediaInfo
+from app.schemas.common import ErrorResponse, ErrorCode
 from app.schemas.employee import (
-    EmployeePublic,
     EmployeeDetail,
     ManagerInfo,
     OrgUnitInfo,
     EmployeeSelfUpdate,
     EmployeeAdminUpdate,
 )
-from app.services.employee_service import (
-    get_all_employees,
-    get_employee_with_refs,  # можно оставить для других мест, здесь не обязателен
-    apply_self_update,
-    apply_admin_update,
-)
-from app.services.media_service import resolve_media_public_url
-from app.schemas.media import MediaInfo
-from app.schemas.common import ErrorResponse, ErrorCode
 
 router = APIRouter(
     prefix="/employees",
@@ -113,20 +113,20 @@ async def get_me(
     return await _build_employee_detail_by_id(current_user.id, session)
 
 # ---------------------------------------------------------------------------
-# Список сотрудников (полные карточки)
+# Список сотрудников (полные карточки) с опциональным поиском
 # ---------------------------------------------------------------------------
 @router.get("/", response_model=list[EmployeeDetail])
-async def list_employees(session: AsyncSession = Depends(get_async_session)):
-    result = await session.execute(
-        select(Employee.id)
-        .where(Employee.status == "active")
-        .order_by(Employee.last_name.asc(), Employee.first_name.asc())
-    )
-    ids = [row[0] for row in result.all()]
-    # Параллельно собираем полные карточки
-    items = await asyncio.gather(*[
+async def list_employees(
+    q: str | None = Query(None, description="Поисковая строка (UTF-8 percent-encoded); если пусто — просто список"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    validate_utf8_or_raise(q)
+
+    rows = await search_employees(session=session, q=q, org_unit_id=None)
+    ids = [e.id for e in rows]
+    items = await asyncio.gather(*(
         _build_employee_detail_by_id(eid, session) for eid in ids
-    ])
+    ))
     return items
 
 # ---------------------------------------------------------------------------
@@ -151,8 +151,7 @@ async def update_me(
     changed = await apply_self_update(session, current_user, payload.model_dump(exclude_unset=True))
     if changed:
         await session.commit()
-    # важный момент: не трогаем ленивые связи current_user,
-    # а делаем рефетч через билдер
+
     return await _build_employee_detail_by_id(current_user.id, session)
 
 # ---------------------------------------------------------------------------
@@ -175,13 +174,7 @@ async def admin_update_employee(
             ).model_dump(),
         )
 
-    target = await (
-        session.execute(
-            select(Employee)
-            .where(Employee.id == employee_id)
-        )
-    )
-    target = target.scalar_one_or_none()
+    target = (await session.execute(select(Employee).where(Employee.id == employee_id))).scalar_one_or_none()
     if target is None:
         raise HTTPException(
             status_code=404,
@@ -196,5 +189,4 @@ async def admin_update_employee(
     if changed:
         await session.commit()
 
-    # как и выше — рефетч с eager загрузкой
     return await _build_employee_detail_by_id(employee_id, session)
