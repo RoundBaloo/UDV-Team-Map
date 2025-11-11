@@ -85,9 +85,9 @@ async def get_latest_for_employee(session: AsyncSession, employee_id: int) -> Op
     return res.scalar_one_or_none()
 
 
-async def list_pending(session: AsyncSession) -> tuple[list[PhotoModeration], int]:
+async def list_pending(session: AsyncSession) -> list[PhotoModeration]:
     """
-    Список всех pending (для HR/админа), опционально по сотруднику.
+    Возвращает список всех заявок в статусе 'pending' (для HR/админа).
     """
     rows = (await session.execute(
         select(PhotoModeration)

@@ -7,32 +7,21 @@ from app.schemas.media import MediaInfo
 
 
 class ManagerInfo(BaseModel):
-    id: int
+    id: int = Field(serialization_alias="manager_id")
     first_name: str
     last_name: str
     title: Optional[str] = None
 
 
 class OrgUnitInfo(BaseModel):
-    id: int
+    id: int = Field(serialization_alias="org_unit_id")
     name: str
     unit_type: Optional[str] = None  # тип орг-юнита (legal_entity / department)
 
 
-class EmployeePublic(BaseModel):
-    """Краткая инфа для списка сотрудников."""
-    id: int
-    first_name: str
-    middle_name: Optional[str] = None
-    last_name: str
-    email: str
-    title: Optional[str] = None
-    status: str
-
-
 class EmployeeDetail(BaseModel):
     """Полная карточка сотрудника для клиентского API."""
-    id: int
+    id: int = Field(serialization_alias="employee_id")
     email: str
 
     first_name: str

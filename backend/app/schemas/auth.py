@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
@@ -14,7 +14,7 @@ class TokenResponse(BaseModel):
 
 
 class MeResponse(BaseModel):
-    id: int
+    employee_id: int = Field(serialization_alias="employee_id", validation_alias="id")
     email: EmailStr
     first_name: str
     last_name: str
