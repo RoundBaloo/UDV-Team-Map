@@ -1,0 +1,46 @@
+.org-structure-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.org-structure-main {
+  flex: 1;
+  padding: 20px 0;
+  background: #f8f9fa;
+}
+
+.org-structure-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.org-structure-header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.org-structure-stats {
+  color: #666;
+  font-size: 14px;
+}
+
+.loading-placeholder {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Стили для карточки структуры */
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  overflow: hidden;
+}

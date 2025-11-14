@@ -1,0 +1,15 @@
+.profile-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.profile-actions__btn {
+  min-width: 120px;
+}
+
+.profile-actions__edit-buttons {
+  display: flex;
+  gap: 12px;
+}

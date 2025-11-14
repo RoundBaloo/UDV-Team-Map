@@ -1,0 +1,111 @@
+.avatar-upload {
+  text-align: center;
+  max-width: 200px;
+}
+
+.avatar-upload__preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  margin: 0 auto 10px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+.avatar-upload__preview:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.avatar-upload--pending .avatar-upload__preview {
+  border-color: #ffc107;
+}
+
+.avatar-upload--rejected .avatar-upload__preview {
+  border-color: #dc3545;
+}
+
+.avatar-upload__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-upload__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: #999;
+}
+
+.avatar-upload__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-size: 12px;
+  text-align: center;
+  padding: 10px;
+}
+
+.avatar-upload__preview:hover .avatar-upload__overlay {
+  opacity: 1;
+}
+
+.avatar-upload__status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.avatar-upload--pending .avatar-upload__status {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.avatar-upload--rejected .avatar-upload__status {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.avatar-upload__hint {
+  font-size: 11px;
+  color: #666;
+  line-height: 1.3;
+}
+
+.avatar-upload--uploading .avatar-upload__preview {
+  border-color: #007bff;
+}
+
+.avatar-upload__progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.avatar-upload__progress-bar {
+  height: 100%;
+  background: #007bff;
+  transition: width 0.3s ease;
+}

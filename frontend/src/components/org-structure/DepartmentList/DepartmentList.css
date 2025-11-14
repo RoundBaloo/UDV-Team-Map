@@ -1,0 +1,10 @@
+.department-list {
+  background: white;
+}
+
+.department-list--empty {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
+}
