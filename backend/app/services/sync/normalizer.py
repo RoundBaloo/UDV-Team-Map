@@ -1,43 +1,48 @@
-# app/services/sync/normalizer.py
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Mapping, Any
+from typing import Any, Mapping
 
 
 @dataclass
 class NormalizedEmployee:
-    external_ref: Optional[str]
+    """Нормализованный сотрудник для слоя синхронизации AD → БД."""
+
+    external_ref: str | None
     email: str
     first_name: str
-    middle_name: Optional[str]
+    middle_name: str | None
     last_name: str
-    title: Optional[str]
-    manager_external_ref: Optional[str]
-    company: Optional[str]
-    department: Optional[str]
-    # готовим почву под синхронизацию паролей
-    password_hash: Optional[str] = None
+    title: str | None
+    manager_external_ref: str | None
+    company: str | None
+    department: str | None
+    # Готовим почву под синхронизацию паролей
+    password_hash: str | None = None
 
 
-def _clean_str(v: Optional[str]) -> Optional[str]:
-    if v is None:
+def _clean_str(value: Any) -> str | None:
+    """Очищает строку: strip, пустые строки приводит к None."""
+    if value is None:
         return None
-    if isinstance(v, str):
-        v = v.strip()
-        return v or None
-    return str(v)
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return str(value)
 
 
 def normalize_employee(raw: Any) -> NormalizedEmployee:
-    """
-    Принимает уже ПРИВЕДЁННЫЙ препроцессором словарь (или pydantic-модель с model_dump()),
-    где ключи РОВНО такие:
+    """Нормализует данные сотрудника из сырого словаря/Pydantic-модели.
+
+    Принимает уже приведённый препроцессором словарь (или Pydantic-модель
+    с методом model_dump), в котором ключи ровно такие:
+
       - external_ref, email, first_name, middle_name, last_name, title,
         manager_external_ref, company, department, (опц.) password_hash
-    Возвращает строго наш контракт NormalizedEmployee.
+
+    Возвращает экземпляр NormalizedEmployee.
     """
-    # допускаем как dict, так и pydantic-модель
+    # Допускаем как dict, так и Pydantic-модель
     if hasattr(raw, "model_dump"):
         d: Mapping[str, Any] = raw.model_dump()
     elif isinstance(raw, dict):
@@ -45,9 +50,9 @@ def normalize_employee(raw: Any) -> NormalizedEmployee:
     else:
         raise TypeError("normalize_employee expects dict or pydantic model")
 
-    # мягкая очистка строк (strip, пустые -> None)
+    # Мягкая очистка строк (strip, пустые -> None)
     external_ref = _clean_str(d.get("external_ref"))
-    email = _clean_str(d.get("email")) or ""  # email обязателен — оставим пустую строку, если вдруг
+    email = _clean_str(d.get("email")) or ""  # email обязателен
     first_name = _clean_str(d.get("first_name")) or ""
     middle_name = _clean_str(d.get("middle_name"))
     last_name = _clean_str(d.get("last_name")) or ""

@@ -1,28 +1,30 @@
-# app/services/sync/preprocessor.py
+# Пока работает с JSON-подобными структурами из AD, в
+# дальнейшем этот файл будет преобразовывать в нужный для
+# normalizer.py формат реальные данные из AD
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.schemas.sync import RawEmployeeAD
 
 
-def _clean_str(v: Optional[str]) -> Optional[str]:
-    if v is None:
+def _clean_str(value: str | None) -> str | None:
+    """Обрезает пробелы, пустые строки приводит к None."""
+    if value is None:
         return None
-    v = str(v).strip()
-    return v or None
+    value = str(value).strip()
+    return value or None
 
 
-def _lower_str(v: Optional[str]) -> Optional[str]:
-    v = _clean_str(v)
-    return v.lower() if v else None
+def _lower_str(value: str | None) -> str | None:
+    """Нормализует строку: trim + lower."""
+    value = _clean_str(value)
+    return value.lower() if value else None
 
 
-def _to_raw_employee(item: Dict[str, Any]) -> RawEmployeeAD:
-    """
-    Ожидаем ровно наш формат ключей.
-    Никаких умных преобразований — только лёгкая нормализация.
-    """
+def _to_raw_employee(item: dict[str, Any]) -> RawEmployeeAD:
+    """Преобразует элемент словаря AD в RawEmployeeAD без сложной логики."""
     return RawEmployeeAD(
         external_ref=_clean_str(item.get("external_ref")),
         email=_lower_str(item.get("email")),
@@ -34,29 +36,29 @@ def _to_raw_employee(item: Dict[str, Any]) -> RawEmployeeAD:
         department=_clean_str(item.get("department")),
         manager_external_ref=_clean_str(item.get("manager_external_ref")),
         manager_full_name=_clean_str(item.get("manager_full_name")),
-        raw=item,  # сохраняем исходник как есть
+        raw=item,
     )
 
 
-def preprocess_ad_payload(payload: Any) -> List[RawEmployeeAD]:
-    """
-    Принимает dict (одна запись), list[dict] (много записей),
-    либо обёртку вида {"items": [...]} / {"employees": [...]}.
-    Ничего лишнего — просто приводим к списку RawEmployeeAD.
+def preprocess_ad_payload(payload: Any) -> list[RawEmployeeAD]:
+    """Приводит произвольный payload к списку RawEmployeeAD.
+
+    Поддерживаемые варианты:
+      - dict (одна запись)
+      - list[dict] (много записей)
+      - обёртки вида {"items": [...]}, {"employees": [...]}, {"data": [...]}
     """
     if payload is None:
         return []
 
-    # 1) если это словарь-обёртка
     if isinstance(payload, dict):
         for key in ("items", "employees", "data"):
             if isinstance(payload.get(key), list):
-                return [_to_raw_employee(x) for x in payload[key] if isinstance(x, dict)]
-        # 2) одиночный объект
-        if isinstance(payload, dict):
-            return [_to_raw_employee(payload)]
+                return [
+                    _to_raw_employee(x) for x in payload[key] if isinstance(x, dict)
+                ]
+        return [_to_raw_employee(payload)]
 
-    # 3) список объектов
     if isinstance(payload, list):
         return [_to_raw_employee(x) for x in payload if isinstance(x, dict)]
 

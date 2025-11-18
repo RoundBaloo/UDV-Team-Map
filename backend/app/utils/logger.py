@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import logging
+
+"""Логгер для операций синхронизации (udv-sync)."""
 
 logger = logging.getLogger("udv-sync")
 
-# если логгер ещё не настроен (чтобы не дублировать хендлеры при повторных импортах)
+# Инициализируем логгер только один раз, чтобы не дублировать хендлеры
 if not logger.handlers:
     logger.setLevel(logging.INFO)
 
@@ -16,6 +20,4 @@ if not logger.handlers:
     handler.setFormatter(formatter)
 
     logger.addHandler(handler)
-
-    # чтобы логи не улетали в корневой логгер uvicorn и не дублировались
     logger.propagate = False

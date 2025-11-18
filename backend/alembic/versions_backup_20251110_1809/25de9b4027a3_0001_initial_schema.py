@@ -10,7 +10,6 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-# revision identifiers, used by Alembic.
 revision: str = "25de9b4027a3"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
@@ -18,11 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # --- extensions first ---
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-
-    # --- 1) core tables in dependency-safe order ---
 
     # 1.1 sync_job
     op.create_table(
@@ -392,5 +388,3 @@ def downgrade() -> None:
     op.drop_index("idx_sync_job_status", table_name="sync_job")
     op.drop_index("idx_sync_job_started_at", table_name="sync_job")
     op.drop_table("sync_job")
-
-    # расширения не трогаем в downgrade

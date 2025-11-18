@@ -8,10 +8,8 @@ Create Date: 2025-11-04 22:39:09.989653
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
 revision: str = '2b476e8a5674'
 down_revision: Union[str, Sequence[str], None] = '3af2042bfbd7'
 branch_labels = None
@@ -19,22 +17,18 @@ depends_on = None
 
 
 def upgrade():
-    # 1) снести старый CHECK, если вдруг есть
     op.execute(
         "ALTER TABLE employee DROP CONSTRAINT IF EXISTS ck_employee_experience_nonneg"
     )
 
-    # 2) снести колонку experience_months, если она есть
     op.execute(
         "ALTER TABLE employee DROP COLUMN IF EXISTS experience_months"
     )
 
-    # 3) добавить hire_date (могут гонять миграции повторно) 
     op.execute(
         "ALTER TABLE employee ADD COLUMN IF NOT EXISTS hire_date DATE"
     )
 
-    # 4) добавить новый CHECK, если его ещё нет
     op.execute(
         """
         DO $$
@@ -54,7 +48,6 @@ def upgrade():
 
 
 def downgrade():
-    # откат: убрать новый CHECK/колонку и вернуть experience_months + старый CHECK
     op.execute(
         "ALTER TABLE employee DROP CONSTRAINT IF EXISTS ck_employee_hire_date_not_future"
     )

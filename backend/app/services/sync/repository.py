@@ -1,7 +1,6 @@
-# app/services/sync/repository.py
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,67 +11,74 @@ from app.models.org_unit import OrgUnit
 
 # === EMPLOYEE HELPERS ===
 
+
 async def get_employee_by_external_ref(
-    session: AsyncSession, external_ref: Optional[str]
-) -> Optional[Employee]:
-    """Получить сотрудника по external_ref."""
+    session: AsyncSession,
+    external_ref: str | None,
+) -> Employee | None:
+    """Возвращает сотрудника по external_ref или None, если не найден."""
     if not external_ref:
         return None
+
     res = await session.execute(
-        select(Employee).where(Employee.external_ref == external_ref)
+        select(Employee).where(Employee.external_ref == external_ref),
     )
     return res.scalar_one_or_none()
 
 
 async def get_employee_by_email(
-    session: AsyncSession, email: Optional[str]
-) -> Optional[Employee]:
-    """Получить сотрудника по email."""
+    session: AsyncSession,
+    email: str | None,
+) -> Employee | None:
+    """Возвращает сотрудника по email или None, если не найден."""
     if not email:
         return None
-    res = await session.execute(select(Employee).where(Employee.email == email))
+
+    res = await session.execute(
+        select(Employee).where(Employee.email == email),
+    )
     return res.scalar_one_or_none()
 
 
 async def upsert_employee_core(
     session: AsyncSession,
     *,
-    external_ref: Optional[str],
+    external_ref: str | None,
     email: str,
     first_name: str,
     last_name: str,
-    middle_name: Optional[str],
-    title: Optional[str],
-    bio: Optional[str],
-    skill_ratings: Optional[Dict[str, Any]],
-    lowest_org_unit_id: Optional[int],
-    password_hash: Optional[str] = None,   # 🆕 добавлено
-) -> Tuple[Employee, bool, bool]:
-    """
-    Возвращает (employee, created, changed).
+    middle_name: str | None,
+    title: str | None,
+    bio: str | None,
+    skill_ratings: dict[str, Any] | None,
+    lowest_org_unit_id: int | None,
+    password_hash: str | None = None,
+) -> tuple[Employee, bool, bool]:
+    """Создаёт или обновляет сотрудника.
 
-    changed=True — если при апдейте реально что-то поменялось.
-    created=True — если сотрудник создан заново.
+    Возвращает кортеж (employee, created, changed), где:
+    - created=True, если сотрудник был создан;
+    - changed=True, если при обновлении действительно изменились поля.
     """
     created = False
     changed = False
 
-    # 1. ищем по external_ref, иначе по email
-    existing = None
+    existing: Employee | None = None
     if external_ref:
         res = await session.execute(
-            select(Employee).where(Employee.external_ref == external_ref)
+            select(Employee).where(Employee.external_ref == external_ref),
         )
         existing = res.scalar_one_or_none()
 
     if not existing:
-        res = await session.execute(select(Employee).where(Employee.email == email))
+        res = await session.execute(
+            select(Employee).where(Employee.email == email),
+        )
         existing = res.scalar_one_or_none()
 
-    # 2. если найден — обновляем поля
     if existing:
 
-        def set_if(field: str, value):
+        def set_if(field: str, value: Any) -> None:
             nonlocal changed
             current = getattr(existing, field)
             if (current or None) != (value or None):
@@ -88,14 +94,12 @@ async def upsert_employee_core(
         set_if("skill_ratings", skill_ratings)
         set_if("lowest_org_unit_id", lowest_org_unit_id)
 
-        # 🧩 если пришёл новый хэш — обновляем, если пустой — не трогаем
         if password_hash and existing.password_hash != password_hash:
             existing.password_hash = password_hash
             changed = True
 
         emp = existing
 
-    # 3. иначе создаём нового
     else:
         emp = Employee(
             external_ref=external_ref,
@@ -108,7 +112,7 @@ async def upsert_employee_core(
             skill_ratings=skill_ratings,
             lowest_org_unit_id=lowest_org_unit_id,
             status="active",
-            password_hash=password_hash,  # 🆕 сохраняем при создании
+            password_hash=password_hash,
         )
         session.add(emp)
         created = True
@@ -119,20 +123,22 @@ async def upsert_employee_core(
 
 # === ORG_UNIT HELPERS ===
 
+
 async def get_org_unit_by_name_and_type(
     session: AsyncSession,
     *,
-    name: Optional[str],
-    unit_type: Optional[str],
-) -> Optional[OrgUnit]:
-    """Получить орг-юнит по имени и типу (если не архивный)."""
+    name: str | None,
+    unit_type: str | None,
+) -> OrgUnit | None:
+    """Возвращает неархивный орг-юнит по имени и типу или None, если не найден."""
     if not name or not unit_type:
         return None
+
     res = await session.execute(
         select(OrgUnit).where(
             OrgUnit.name == name,
             OrgUnit.unit_type == unit_type,
             OrgUnit.is_archived.is_(False),
-        )
+        ),
     )
     return res.scalar_one_or_none()

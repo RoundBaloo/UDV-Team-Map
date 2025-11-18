@@ -1,97 +1,108 @@
 from __future__ import annotations
 
-from datetime import datetime, date
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, ConfigDict, PositiveInt
+from datetime import date, datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+
 from app.schemas.media import MediaInfo
 
 
 class ManagerInfo(BaseModel):
+    """Краткая информация о руководителе сотрудника."""
+
     id: int = Field(serialization_alias="manager_id")
     first_name: str
     last_name: str
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class OrgUnitInfo(BaseModel):
+    """Информация о наименьшем орг-юните сотрудника."""
+
     id: int = Field(serialization_alias="org_unit_id")
     name: str
-    unit_type: Optional[str] = None  # тип орг-юнита (legal_entity / department)
+    # Тип орг-юнита (например, legal_entity / department)
+    unit_type: str | None = None
 
 
 class EmployeeDetail(BaseModel):
     """Полная карточка сотрудника для клиентского API."""
+
     id: int = Field(serialization_alias="employee_id")
     email: str
 
     first_name: str
-    middle_name: Optional[str] = None
+    middle_name: str | None = None
     last_name: str
-    title: Optional[str] = None
+    title: str | None = None
     status: str
 
-    work_city: Optional[str] = None
-    work_format: Optional[str] = None
-    time_zone: Optional[str] = None
+    work_city: str | None = None
+    work_format: str | None = None
+    time_zone: str | None = None
 
-    work_phone: Optional[str] = None
-    mattermost_handle: Optional[str] = None
+    work_phone: str | None = None
+    mattermost_handle: str | None = None
 
-    birth_date: Optional[date] = None
-    hire_date: Optional[date] = None
-    bio: Optional[str] = None
-    skill_ratings: Optional[Dict[str, Any]] = None
+    birth_date: date | None = None
+    hire_date: date | None = None
+    bio: str | None = None
+    skill_ratings: dict[str, Any] | None = None
 
     is_admin: bool = False
     is_blocked: bool = False
-    last_login_at: Optional[datetime] = None
+    last_login_at: datetime | None = None
 
-    photo: Optional[MediaInfo] = None
-    manager: Optional[ManagerInfo] = None
-    org_unit: Optional[OrgUnitInfo] = None
+    photo: MediaInfo | None = None
+    manager: ManagerInfo | None = None
+    org_unit: OrgUnitInfo | None = None
 
 
 class EmployeeSelfUpdate(BaseModel):
-    """
-    Что сотрудник может менять у себя сам.
-    """
+    """Поля профиля, которые сотрудник может редактировать у себя сам."""
+
     model_config = ConfigDict(extra="forbid")
 
-    middle_name: Optional[str] = None
-    bio: Optional[str] = None
-    skill_ratings: Optional[Dict[str, Any]] = None
+    middle_name: str | None = None
+    bio: str | None = None
+    skill_ratings: dict[str, Any] | None = None
 
-    work_phone: Optional[str] = None
-    mattermost_handle: Optional[str] = None
-    birth_date: Optional[date] = None
+    work_phone: str | None = None
+    mattermost_handle: str | None = None
+    birth_date: date | None = None
     photo_id: PositiveInt | None = None
 
-    work_city: Optional[str] = None
-    work_format: Optional[str] = Field(None, pattern="^(office|hybrid|remote)$")
-    time_zone: Optional[str] = None
+    work_city: str | None = None
+    work_format: str | None = Field(
+        None,
+        pattern="^(office|hybrid|remote)$",
+    )
+    time_zone: str | None = None
 
-    # по нашему решению — даём редактировать сотруднику
-    hire_date: Optional[date] = None
+    # По нашему решению даём редактировать сотруднику
+    hire_date: date | None = None
 
 
 class EmployeeAdminUpdate(BaseModel):
-    """
-    Что админ может менять у любого пользователя.
-    Включает всё, что может юзер, плюс is_admin.
-    """
+    """Поля, которые админ может менять у любого пользователя."""
+
     model_config = ConfigDict(extra="forbid")
 
-    middle_name: Optional[str] = None
-    bio: Optional[str] = None
-    skill_ratings: Optional[Dict[str, Any]] = None
+    middle_name: str | None = None
+    bio: str | None = None
+    skill_ratings: dict[str, Any] | None = None
 
-    work_phone: Optional[str] = None
-    mattermost_handle: Optional[str] = None
-    birth_date: Optional[date] = None
-    work_city: Optional[str] = None
-    work_format: Optional[str] = Field(None, pattern="^(office|hybrid|remote)$")
-    time_zone: Optional[str] = None
-    hire_date: Optional[date] = None
+    work_phone: str | None = None
+    mattermost_handle: str | None = None
+    birth_date: date | None = None
+    work_city: str | None = None
+    work_format: str | None = Field(
+        None,
+        pattern="^(office|hybrid|remote)$",
+    )
+    time_zone: str | None = None
+    hire_date: date | None = None
 
-    is_admin: Optional[bool] = None
-    is_blocked: Optional[bool] = None
+    is_admin: bool | None = None
+    is_blocked: bool | None = None

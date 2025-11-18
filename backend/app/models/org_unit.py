@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List
 
 from sqlalchemy import (
     BigInteger,
@@ -14,19 +13,18 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-# from sqlalchemy.dialects.postgresql import JSONB  # лишний, можно удалить
 
 from app.models.base import Base
 
 
 class OrgUnit(Base):
-    """Блок / Отдел / Направление (иерархия оргструктуры)."""
+    """Орг-юнит: блок / домен / юрлицо / департамент / направление."""
 
     __tablename__ = "org_unit"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    parent_id: Mapped[Optional[int]] = mapped_column(
+    parent_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("org_unit.id", ondelete="SET NULL"),
         nullable=True,
@@ -41,8 +39,7 @@ class OrgUnit(Base):
         server_default="false",
     )
 
-    # руководитель юнита (employee.id)
-    manager_id: Mapped[Optional[int]] = mapped_column(
+    manager_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("employee.id", ondelete="SET NULL"),
         nullable=True,
@@ -59,32 +56,29 @@ class OrgUnit(Base):
         server_default=func.now(),
     )
 
-    # -------------------
-    # relationships
-    # -------------------
+    # --- relationships ---
 
-    parent: Mapped[Optional["OrgUnit"]] = relationship(
+    parent: Mapped["OrgUnit"] = relationship(
         "OrgUnit",
         remote_side="OrgUnit.id",
         back_populates="children",
     )
 
-    children: Mapped[List["OrgUnit"]] = relationship(
+    children: Mapped[list["OrgUnit"]] = relationship(
         "OrgUnit",
         back_populates="parent",
         passive_deletes=True,
     )
 
-    # cписок сотрудников, для которых этот OrgUnit — "наименьший" (lowest)
-    employees: Mapped[List["Employee"]] = relationship(
+    # Сотрудники, для которых этот OrgUnit - наименьший (lowest)
+    employees: Mapped[list["Employee"]] = relationship(
         "Employee",
         back_populates="lowest_org_unit",
         foreign_keys="Employee.lowest_org_unit_id",
         passive_deletes=True,
     )
 
-    # руководитель как объект Employee
-    manager: Mapped[Optional["Employee"]] = relationship(
+    manager: Mapped["Employee"] = relationship(
         "Employee",
         foreign_keys="OrgUnit.manager_id",
     )

@@ -1,13 +1,14 @@
-# app/schemas/common.py
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Optional, List
+from typing import Any
 
 from pydantic import BaseModel
 
 
 class ErrorCode(StrEnum):
+    """Коды ошибок верхнего уровня."""
+
     # Аутентификация / авторизация
     AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
     AUTH_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED"
@@ -29,36 +30,36 @@ class ErrorCode(StrEnum):
 
 
 class ErrorDetail(BaseModel):
-    """
-    Одна конкретная ошибка.
+    """Описание одной конкретной ошибки.
+
     - code: машинный код (см. ErrorCode)
     - message: человекочитаемое сообщение
-    - field: для ошибок валидации (например, 'email')
+    - field: для ошибок валидации (например, "email")
     - hint: необязательный совет, что можно сделать
     """
-    code: str  # допускаем и произвольные коды, чтобы не ломаться при расширении
+
+    # Допускаем произвольные строковые коды, чтобы не ломаться при расширении.
+    code: str
     message: str
-    field: Optional[str] = None
-    hint: Optional[str] = None
+    field: str | None = None
+    hint: str | None = None
 
 
 class ErrorResponse(BaseModel):
-    """
-    Стандартный ответ с ошибкой.
+    """Стандартный ответ с ошибкой.
+
     Совместим с существующим форматом: поле `detail` остаётся.
     Можно вернуть несколько ошибок списком в `errors`.
     Дополнительно: status, request_id, meta.
     """
-    # старое поле (оставляем для совместимости)
-    detail: Optional[ErrorDetail] = None
 
-    # новое — поддержка нескольких ошибок
-    errors: Optional[List[ErrorDetail]] = None
+    detail: ErrorDetail | None = None
 
-    # полезные доп. поля
-    status: Optional[int] = None
-    request_id: Optional[str] = None
-    meta: Optional[dict[str, Any]] = None
+    errors: list[ErrorDetail] | None = None
+
+    status: int | None = None
+    request_id: str | None = None
+    meta: dict[str, Any] | None = None
 
     @classmethod
     def single(
@@ -66,15 +67,20 @@ class ErrorResponse(BaseModel):
         *,
         code: ErrorCode | str,
         message: str,
-        status: Optional[int] = None,
-        field: Optional[str] = None,
-        hint: Optional[str] = None,
-        request_id: Optional[str] = None,
-        meta: Optional[dict[str, Any]] = None,
-    ) -> "ErrorResponse":
+        status: int | None = None,
+        field: str | None = None,
+        hint: str | None = None,
+        request_id: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> ErrorResponse:
         """Удобный конструктор для одной ошибки."""
         return cls(
-            detail=ErrorDetail(code=str(code), message=message, field=field, hint=hint),
+            detail=ErrorDetail(
+                code=str(code),
+                message=message,
+                field=field,
+                hint=hint,
+            ),
             status=status,
             request_id=request_id,
             meta=meta,
@@ -83,12 +89,12 @@ class ErrorResponse(BaseModel):
     @classmethod
     def multiple(
         cls,
-        details: List[ErrorDetail],
+        details: list[ErrorDetail],
         *,
-        status: Optional[int] = None,
-        request_id: Optional[str] = None,
-        meta: Optional[dict[str, Any]] = None,
-    ) -> "ErrorResponse":
+        status: int | None = None,
+        request_id: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> ErrorResponse:
         """Удобный конструктор для нескольких ошибок."""
         return cls(
             errors=details,
