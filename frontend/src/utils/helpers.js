@@ -60,9 +60,22 @@ export const isValidFileSize = (file) => {
 };
 
 // Форматирование даты
-export const formatDate = (dateString) => {
-  if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString('ru-RU');
+export const formatDate = (dateString, includeTime = false) => {
+  if (!dateString) return includeTime ? 'Никогда' : '';
+  
+  const options = {
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric',
+  };
+  
+  if (includeTime) {
+    options.hour = '2-digit';
+    options.minute = '2-digit';
+    options.second = '2-digit';
+  }
+  
+  return new Date(dateString).toLocaleDateString('ru-RU', options);
 };
 
 // Обработка ошибок API

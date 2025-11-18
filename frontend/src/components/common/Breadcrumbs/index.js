@@ -1,79 +1,106 @@
-
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './Breadcrumbs.css';
+
+const BREADCRUMB_MAP = {
+  '': 'Главная',
+  'admin': 'Админка', 
+  'users': 'Пользователи',
+  'photos': 'Фотографии',
+  'profile': 'Профиль',
+  'team': 'Команда',
+};
 
 const Breadcrumbs = ({ customPath }) => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Обработчик клика по хлебной крошке
-  const handleBreadcrumbClick = (item, event) => {
+  const handleOrgUnitClick = (item, event) => {
     event.preventDefault();
     
-    // Сохраняем информацию о выбранном узле в sessionStorage
     sessionStorage.setItem('selectedOrgUnit', JSON.stringify({
       id: item.id,
       name: item.name,
       unit_type: item.unit_type,
     }));
     
-    // Переходим на главную страницу
     navigate('/');
   };
 
-  // Если передан кастомный путь, используем его
-  if (customPath && customPath.length > 0) {
+  const renderBreadcrumbItem = (item, isLast, isCustomPath = false) => {
+    const content = isLast ? (
+      <span className="breadcrumbs__current">{item.name}</span>
+    ) : isCustomPath ? (
+      <a 
+        href="/"
+        className="breadcrumbs__item"
+        onClick={(e) => handleOrgUnitClick(item, e)}
+      >
+        {item.name}
+      </a>
+    ) : (
+      <Link to={item.routeTo} className="breadcrumbs__item">
+        {item.name}
+      </Link>
+    );
+
+    return (
+      <span key={item.key} className="breadcrumbs__separator">
+        {' > '}
+        {content}
+      </span>
+    );
+  };
+
+  const getPathBreadcrumbs = () => {
+    const paths = location.pathname.split('/').filter(Boolean);
+    
+    if (paths.length === 0) {
+      return null;
+    }
+
+    const breadcrumbItems = paths.map((path, index) => {
+      const routeTo = `/${paths.slice(0, index + 1).join('/')}`;
+      const name = BREADCRUMB_MAP[path] || path;
+      
+      return {
+        key: routeTo,
+        name,
+        routeTo,
+        isLast: index === paths.length - 1,
+      };
+    });
+
+    return breadcrumbItems;
+  };
+
+  const getCustomBreadcrumbs = () => {
+    return customPath.map((item, index) => ({
+      key: item.id,
+      name: item.name,
+      isLast: index === customPath.length - 1,
+    }));
+  };
+
+  if (customPath?.length > 0) {
+    const breadcrumbItems = getCustomBreadcrumbs();
+    
     return (
       <nav className="breadcrumbs">
         <div className="breadcrumbs__container">
           <Link to="/" className="breadcrumbs__item breadcrumbs__home">
             Главная
           </Link>
-          
-          {customPath.map((item, index) => {
-            const isLast = index === customPath.length - 1;
-            
-            return (
-              <span key={item.id} className="breadcrumbs__separator">
-                {' > '}
-                {isLast ? (
-                  <span className="breadcrumbs__current">
-                    {item.name}
-                  </span>
-                ) : (
-                  <a 
-                    href="/" 
-                    className="breadcrumbs__item"
-                    onClick={(e) => handleBreadcrumbClick(item, e)}
-                  >
-                    {item.name}
-                  </a>
-                )}
-              </span>
-            );
-          })}
+          {breadcrumbItems.map(item => 
+            renderBreadcrumbItem(item, item.isLast, true)
+          )}
         </div>
       </nav>
     );
   }
 
-  // Старая логика для других страниц
-  const paths = location.pathname.split('/').filter(path => path);
-
-  const getBreadcrumbName = (path, index) => {
-    const breadcrumbMap = {
-      '': 'Главная',
-      'admin': 'Админка',
-      'users': 'Пользователи',
-      'photos': 'Фотографии',
-      'profile': 'Профиль',
-      'team': 'Команда',
-    };
-
-    return breadcrumbMap[path] || path;
-  };
-
-  if (paths.length === 0) {
+  const breadcrumbItems = getPathBreadcrumbs();
+  
+  if (!breadcrumbItems) {
     return null;
   }
 
@@ -83,26 +110,9 @@ const Breadcrumbs = ({ customPath }) => {
         <Link to="/" className="breadcrumbs__item breadcrumbs__home">
           Главная
         </Link>
-        
-        {paths.map((path, index) => {
-          const routeTo = `/${paths.slice(0, index + 1).join('/')}`;
-          const isLast = index === paths.length - 1;
-          
-          return (
-            <span key={routeTo} className="breadcrumbs__separator">
-              {' > '}
-              {isLast ? (
-                <span className="breadcrumbs__current">
-                  {getBreadcrumbName(path, index)}
-                </span>
-              ) : (
-                <Link to={routeTo} className="breadcrumbs__item">
-                  {getBreadcrumbName(path, index)}
-                </Link>
-              )}
-            </span>
-          );
-        })}
+        {breadcrumbItems.map(item => 
+          renderBreadcrumbItem(item, item.isLast, false)
+        )}
       </div>
     </nav>
   );

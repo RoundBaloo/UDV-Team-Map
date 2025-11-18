@@ -5,6 +5,11 @@ import { formatEmployeeName } from '../../../utils/helpers';
 import SearchBar from '../SearchBar';
 import './Header.css';
 
+const ADMIN_ROUTES = {
+  USERS: '/admin/users',
+  PHOTOS: '/admin/photos',
+};
+
 const Header = () => {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -20,81 +25,129 @@ const Header = () => {
   };
 
   const toggleAdminPanel = () => {
-    setIsAdminPanelVisible(!isAdminPanelVisible);
+    setIsAdminPanelVisible(prev => !prev);
   };
 
   return (
     <header className="header">
       <div className="header__container">
-        {/* Первая строка */}
-        <div className="header__top">
-          <div className="header__left">
-            <Link to="/" className="header__logo">
-              UDV Team Map
-            </Link>
-            <SearchBar />
-          </div>
-
-          <label className="header__admin-toggle">
-            <input 
-              type="checkbox"
-              checked={isAdminPanelVisible}
-              onChange={toggleAdminPanel}
-              className="header__admin-checkbox"
-            />
-            <span className="header__admin-toggle-text">
-              Административная панель
-            </span>
-          </label>
-
-          <div className="header__right">
-            {user && (
-              <div className="header__user">
-                <button 
-                  className="header__profile-btn"
-                  onClick={handleProfileClick}
-                  title="Мой профиль"
-                >
-                  <div className="header__user-avatar">
-                    {user.first_name?.[0]}{user.last_name?.[0]}
-                  </div>
-                  <span className="header__user-name">
-                    {formatEmployeeName(user.first_name, user.last_name)}
-                  </span>
-                </button>
-                
-                <button 
-                  className="header__logout-btn"
-                  onClick={handleLogout}
-                  title="Выйти"
-                >
-                  Выйти
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Вторая строка - только для админов */}
+        <HeaderTop 
+          user={user}
+          isAdmin={isAdmin}
+          isAdminPanelVisible={isAdminPanelVisible}
+          onProfileClick={handleProfileClick}
+          onLogout={handleLogout}
+          onToggleAdminPanel={toggleAdminPanel}
+        />
+        
         {isAdmin && (
-          <div className="header__bottom">
-            <div className="header__admin-controls">
-
-              {isAdminPanelVisible && (
-                <nav className="header__admin-nav">
-                  <Link to="/admin/users" className="header__admin-nav-link">
-                    Пользователи
-                  </Link>
-                  <Link to="/admin/photos" className="header__admin-nav-link">
-                    Модерация фото
-                  </Link>
-                </nav>
-              )}
-            </div>
-          </div>
+          <HeaderBottom 
+            isAdminPanelVisible={isAdminPanelVisible}
+          />
         )}
       </div>
     </header>
+  );
+};
+
+const HeaderTop = ({ 
+  user, 
+  isAdmin, 
+  isAdminPanelVisible, 
+  onProfileClick, 
+  onLogout, 
+  onToggleAdminPanel,
+}) => {
+  return (
+    <div className="header__top">
+      <div className="header__left">
+        <Link to="/" className="header__logo">
+          UDV Team Map
+        </Link>
+        <SearchBar />
+      </div>
+
+      {isAdmin && (
+        <AdminToggle 
+          isVisible={isAdminPanelVisible}
+          onToggle={onToggleAdminPanel}
+        />
+      )}
+
+      {user && (
+        <UserMenu 
+          user={user}
+          onProfileClick={onProfileClick}
+          onLogout={onLogout}
+        />
+      )}
+    </div>
+  );
+};
+
+const AdminToggle = ({ isVisible, onToggle }) => {
+  return (
+    <label className="header__admin-toggle">
+      <input 
+        type="checkbox"
+        checked={isVisible}
+        onChange={onToggle}
+        className="header__admin-checkbox"
+      />
+      <span className="header__admin-toggle-text">
+        Административная панель
+      </span>
+    </label>
+  );
+};
+
+const UserMenu = ({ user, onProfileClick, onLogout }) => {
+  return (
+    <div className="header__right">
+      <div className="header__user">
+        <button 
+          className="header__profile-btn"
+          onClick={onProfileClick}
+          title="Мой профиль"
+        >
+          <div className="header__user-avatar">
+            {user.first_name?.[0]}{user.last_name?.[0]}
+          </div>
+          <span className="header__user-name">
+            {formatEmployeeName(user.first_name, user.last_name)}
+          </span>
+        </button>
+        
+        <button 
+          className="header__logout-btn"
+          onClick={onLogout}
+          title="Выйти"
+        >
+          Выйти
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const HeaderBottom = ({ isAdminPanelVisible }) => {
+  if (!isAdminPanelVisible) {
+    return null;
+  }
+
+  return (
+    <div className="header__bottom">
+      <div className="header__admin-controls">
+        <nav className="header__admin-nav">
+          <Link to={ADMIN_ROUTES.USERS} className="header__admin-nav-link">
+            Пользователи
+          </Link>
+          <Link to={ADMIN_ROUTES.PHOTOS} className="header__admin-nav-link">
+            Модерация фото
+          </Link>
+        </nav>
+      </div>
+    </div>
   );
 };
 

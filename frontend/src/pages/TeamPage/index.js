@@ -142,7 +142,7 @@ const TeamPage = () => {
     return (
       <div className="team-page">
         <Header />
-        {/* <Breadcrumbs customPath={breadcrumbPath} /> */}
+        <Breadcrumbs customPath={breadcrumbPath} />
         <main className="team-main">
           <div className="container">
             <div className="loading-placeholder">Загрузка информации о команде...</div>
@@ -156,7 +156,7 @@ const TeamPage = () => {
     return (
       <div className="team-page">
         <Header />
-        {/* <Breadcrumbs customPath={breadcrumbPath} /> */}
+        <Breadcrumbs customPath={breadcrumbPath} />
         <main className="team-main">
           <div className="container">
             <div className="error-placeholder">Команда не найдена</div>
@@ -181,7 +181,7 @@ const TeamPage = () => {
   return (
     <div className="team-page">
       <Header />
-      {/* <Breadcrumbs customPath={breadcrumbPath} /> */}
+      <Breadcrumbs customPath={breadcrumbPath} />
       
       <main className="team-main">
         <div className="container">

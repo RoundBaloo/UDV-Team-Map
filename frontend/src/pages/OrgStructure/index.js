@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
-import Breadcrumbs from '../../components/common/Breadcrumbs';
 import DepartmentList from '../../components/org-structure/DepartmentList';
 import { orgUnitsApi } from '../../services/api/orgUnits';
 import { mockOrgStructure } from '../../utils/mockData';
@@ -94,7 +93,7 @@ const OrgStructure = () => {
   return (
     <div className="org-structure-page">
       <Header />
-      {/* <Breadcrumbs /> */}
+      {/* <Breadcrumbs customPath={getBreadcrumbPath()} />  */}
       
       <main className="org-structure-main">
         <div className="container">

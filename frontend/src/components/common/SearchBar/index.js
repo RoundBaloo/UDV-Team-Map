@@ -4,63 +4,91 @@ import { debounce } from '../../../utils/helpers';
 import { employeesApi } from '../../../services/api/employees';
 import './SearchBar.css';
 
+const DEBOUNCE_DELAY = 300;
+const BLUR_DELAY = 200;
+
+const DEFAULT_TEXTS = {
+  placeholder: 'Поиск сотрудников...',
+  loading: 'Поиск...',
+  noResults: 'Ничего не найдено',
+  noDepartment: 'Не указан',
+  noTitle: 'Должность не указана',
+};
+
 const SearchBar = () => {
-  const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [searchState, setSearchState] = useState({
+    query: '',
+    suggestions: [],
+    showSuggestions: false,
+    loading: false,
+  });
+  
   const navigate = useNavigate();
 
-  const searchItems = useCallback(
-    debounce(async (searchQuery) => {
-      if (!searchQuery.trim()) {
-        setSuggestions([]);
-        return;
-      }
+  const performSearch = useCallback(async searchQuery => {
+    if (!searchQuery.trim()) {
+      setSearchState(prev => ({ ...prev, suggestions: [] }));
+      return;
+    }
 
-      setLoading(true);
+    setSearchState(prev => ({ ...prev, loading: true }));
 
-      try {
-        // Реальный поиск по сотрудникам через API
-        const employeesResponse = await employeesApi.getEmployees({ q: searchQuery });
-        
-        const employeeSuggestions = employeesResponse.map(emp => ({
-          id: emp.employee_id,
-          type: 'employee',
-          name: `${emp.first_name} ${emp.last_name}`,
-          title: emp.title,
-          department: emp.org_unit?.name || 'Не указан',
-        }));
+    try {
+      const employeesResponse = await employeesApi.getEmployees({ q: searchQuery });
+      
+      const employeeSuggestions = employeesResponse.map(emp => ({
+        id: emp.employee_id,
+        type: 'employee',
+        name: `${emp.first_name} ${emp.last_name}`,
+        title: emp.title,
+        department: emp.org_unit?.name || DEFAULT_TEXTS.noDepartment,
+      }));
 
-        setSuggestions(employeeSuggestions);
-        
-      } catch (error) {
-        console.error('Search error:', error);
-        setSuggestions([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 300),
-    []
+      setSearchState(prev => ({ 
+        ...prev, 
+        suggestions: employeeSuggestions,
+        loading: false,
+      }));
+      
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchState(prev => ({ 
+        ...prev, 
+        suggestions: [],
+        loading: false,
+      }));
+    }
+  }, []);
+
+  const debouncedSearch = useCallback(
+    debounce((searchQuery) => performSearch(searchQuery), DEBOUNCE_DELAY),
+    [performSearch],
   );
 
-  const handleInputChange = (e) => {
+  const handleInputChange = e => {
     const value = e.target.value;
-    setQuery(value);
+    const hasQuery = value.trim().length > 0;
     
-    if (value.trim()) {
-      searchItems(value);
-      setShowSuggestions(true);
+    setSearchState(prev => ({ 
+      ...prev, 
+      query: value,
+      showSuggestions: hasQuery,
+    }));
+    
+    if (hasQuery) {
+      debouncedSearch(value);
     } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      setSearchState(prev => ({ ...prev, suggestions: [] }));
     }
   };
 
-  const handleSuggestionClick = (item) => {
-    setQuery('');
-    setShowSuggestions(false);
-    setSuggestions([]);
+  const handleSuggestionClick = item => {
+    setSearchState({
+      query: '',
+      suggestions: [],
+      showSuggestions: false,
+      loading: false,
+    });
 
     if (item.type === 'employee') {
       navigate(`/profile/${item.id}`);
@@ -68,70 +96,113 @@ const SearchBar = () => {
   };
 
   const handleInputFocus = () => {
+    const { query, suggestions } = searchState;
     if (query && suggestions.length > 0) {
-      setShowSuggestions(true);
+      setSearchState(prev => ({ ...prev, showSuggestions: true }));
     }
   };
 
   const handleInputBlur = () => {
-    setTimeout(() => setShowSuggestions(false), 200);
+    setTimeout(() => {
+      setSearchState(prev => ({ ...prev, showSuggestions: false }));
+    }, BLUR_DELAY);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = e => {
+    const { query, suggestions } = searchState;
     if (e.key === 'Enter' && query.trim() && suggestions.length > 0) {
       handleSuggestionClick(suggestions[0]);
     }
   };
 
+  const { query, suggestions, showSuggestions, loading } = searchState;
+
   return (
     <div className="search-bar">
-      <div className="search-bar__input-container">
-        <input
-          type="text"
-          className="search-bar__input"
-          placeholder="Поиск сотрудников..."
-          value={query}
-          onChange={handleInputChange}
-          onFocus={handleInputFocus}
-          onBlur={handleInputBlur}
-          onKeyDown={handleKeyDown}
-        />
-        <div className="search-bar__icon" />
-      </div>
-
+      <SearchInput
+        query={query}
+        onChange={handleInputChange}
+        onFocus={handleInputFocus}
+        onBlur={handleInputBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={DEFAULT_TEXTS.placeholder}
+      />
+      
       {showSuggestions && (
-        <div className="search-bar__suggestions">
-          {loading && (
-            <div className="search-bar__suggestion search-bar__suggestion--loading">
-              Поиск...
-            </div>
-          )}
-          
-          {!loading && suggestions.map(item => (
-            <div
-              key={`${item.type}-${item.id}`}
-              className="search-bar__suggestion"
-              onClick={() => handleSuggestionClick(item)}
-            >
-              <span className="search-bar__suggestion-icon">
-                👤
-              </span>
-              <div className="search-bar__suggestion-info">
-                <div className="search-bar__suggestion-name">{item.name}</div>
-                <div className="search-bar__suggestion-title">
-                  {item.title || 'Должность не указана'}
-                </div>
-              </div>
-            </div>
-          ))}
-          
-          {!loading && query && suggestions.length === 0 && (
-            <div className="search-bar__suggestion search-bar__suggestion--empty">
-              Ничего не найдено
-            </div>
-          )}
-        </div>
+        <SearchSuggestions
+          suggestions={suggestions}
+          loading={loading}
+          query={query}
+          onSuggestionClick={handleSuggestionClick}
+        />
       )}
+    </div>
+  );
+};
+
+const SearchInput = ({ query, onChange, onFocus, onBlur, onKeyDown, placeholder }) => {
+  return (
+    <div className="search-bar__input-container">
+      <input
+        type="text"
+        className="search-bar__input"
+        placeholder={placeholder}
+        value={query}
+        onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+      />
+      <div className="search-bar__icon" />
+    </div>
+  );
+};
+
+const SearchSuggestions = ({ suggestions, loading, query, onSuggestionClick }) => {
+  return (
+    <div className="search-bar__suggestions">
+      {loading && <LoadingSuggestion />}
+      
+      {!loading && suggestions.map(item => (
+        <SuggestionItem
+          key={`${item.type}-${item.id}`}
+          item={item}
+          onClick={onSuggestionClick}
+        />
+      ))}
+      
+      {!loading && query && suggestions.length === 0 && (
+        <EmptySuggestion />
+      )}
+    </div>
+  );
+};
+
+const LoadingSuggestion = () => (
+  <div className="search-bar__suggestion search-bar__suggestion--loading">
+    {DEFAULT_TEXTS.loading}
+  </div>
+);
+
+const EmptySuggestion = () => (
+  <div className="search-bar__suggestion search-bar__suggestion--empty">
+    {DEFAULT_TEXTS.noResults}
+  </div>
+);
+
+const SuggestionItem = ({ item, onClick }) => {
+  return (
+    <div
+      className="search-bar__suggestion"
+      onClick={() => onClick(item)}
+    >
+      <span className="search-bar__suggestion-icon">👤</span>
+      <div className="search-bar__suggestion-info">
+        <div className="search-bar__suggestion-name">{item.name}</div>
+        <div className="search-bar__suggestion-title">
+          {item.title || DEFAULT_TEXTS.noTitle}
+        </div>
+      </div>
     </div>
   );
 };

@@ -2,46 +2,64 @@ import React, { useState, useEffect } from 'react';
 import { healthApi } from '../../../services/api/health';
 import './ApiStatus.css';
 
+const CHECK_INTERVAL = 30000; // 30 секунд
+
+const STATUS_CONFIG = {
+  checking: { text: 'Проверка подключения...', details: 'Проверка подключения к API...' },
+  connected: { text: 'API подключен', details: 'API доступен' },
+  error: { text: 'Ошибка подключения', details: '' },
+};
+
 const ApiStatus = () => {
   const [status, setStatus] = useState('checking');
   const [details, setDetails] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkApi = async () => {
       try {
-        setStatus('checking');
-        setDetails('Проверка подключения к API...');
+        if (isMounted) {
+          setStatus('checking');
+          setDetails(STATUS_CONFIG.checking.details);
+        }
         
         const healthResult = await healthApi.checkHealth();
         
-        if (healthResult.success) {
-          setStatus('connected');
-          setDetails('API доступен');
-        } else {
-          setStatus('error');
-          setDetails(`Ошибка: ${healthResult.error}`);
+        if (isMounted) {
+          if (healthResult.success) {
+            setStatus('connected');
+            setDetails(STATUS_CONFIG.connected.details);
+          } else {
+            setStatus('error');
+            setDetails(`Ошибка: ${healthResult.error}`);
+          }
         }
       } catch (err) {
-        setStatus('error');
-        setDetails(`Не удалось проверить API: ${err.message}`);
+        if (isMounted) {
+          setStatus('error');
+          setDetails(`Не удалось проверить API: ${err.message}`);
+        }
       }
     };
 
     checkApi();
     
-    // Периодическая проверка каждые 30 секунд
-    const interval = setInterval(checkApi, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkApi, CHECK_INTERVAL);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
+
+  const statusInfo = STATUS_CONFIG[status] || STATUS_CONFIG.error;
 
   return (
     <div className={`api-status api-status--${status}`}>
       <div className="api-status__indicator" />
       <div className="api-status__content">
         <div className="api-status__text">
-          {status === 'checking' && 'Проверка подключения...'}
-          {status === 'connected' && 'API подключен'}
-          {status === 'error' && 'Ошибка подключения'}
+          {statusInfo.text}
         </div>
         {details && (
           <div className="api-status__details">{details}</div>

@@ -1,140 +1,175 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { findNodeInSubtree } from '../../../utils/orgStructureUtils';
 import './CollapsibleSection.css';
 
-const CollapsibleSection = ({ data, level = 0, onTeamClick, selectedUnitId }) => {
+const UNIT_TYPES = {
+  GROUP: 'group',
+  DOMAIN: 'domain', 
+  LEGAL_ENTITY: 'legal_entity',
+  DEPARTMENT: 'department',
+  DIRECTION: 'direction',
+};
+
+const ELEMENT_TYPE_MAP = {
+  [UNIT_TYPES.GROUP]: 'block',
+  [UNIT_TYPES.DOMAIN]: 'block',
+  [UNIT_TYPES.LEGAL_ENTITY]: 'block',
+  [UNIT_TYPES.DEPARTMENT]: 'department',
+  [UNIT_TYPES.DIRECTION]: 'direction',
+};
+
+const CollapsibleSection = ({ 
+  data, 
+  level = 0, 
+  onTeamClick, 
+  selectedUnitId,
+}) => {
   const [isOpen, setIsOpen] = useState(level === 0);
   const navigate = useNavigate();
   
   const hasChildren = data.children && data.children.length > 0;
-  
-  // Автоматически раскрываем узел, если он выбран из хлебных крошек
+  const unitId = data.org_unit_id || data.id;
+  const elementType = ELEMENT_TYPE_MAP[data.unit_type] || 'team';
+  const isTeam = elementType === 'team';
+  const isFinalUnit = !hasChildren;
+  const isSelected = selectedUnitId === unitId;
+
   useEffect(() => {
     if (selectedUnitId && hasChildren) {
-      // Проверяем, находится ли выбранный узел в этом поддереве
-      const isInSubtree = findNodeInSubtree(data, selectedUnitId);
-      if (isInSubtree) {
+      const shouldOpen = findNodeInSubtree(data, selectedUnitId);
+      if (shouldOpen) {
         setIsOpen(true);
       }
     }
   }, [selectedUnitId, data, hasChildren]);
 
-  // Функция для поиска узла в поддереве
-  const findNodeInSubtree = (node, targetId) => {
-    const nodeId = node.org_unit_id || node.id;
-    if (nodeId === targetId) return true;
-    if (node.children) {
-      for (let child of node.children) {
-        if (findNodeInSubtree(child, targetId)) return true;
-      }
-    }
-    return false;
-  };
-
-  // Определяем тип элемента на основе unit_type
-  const getElementType = () => {
-    switch (data.unit_type) {
-    case 'group':
-    case 'domain':
-    case 'legal_entity':
-      return 'block';
-    case 'department':
-      return 'department';
-    case 'direction':
-      return 'direction';
-    default:
-      return 'team';
-    }
-  };
-
-  const elementType = getElementType();
-  const isTeam = elementType === 'team';
-
-  // Определяем является ли элемент конечным (без детей)
-  const isFinalUnit = !hasChildren;
-
-  // Подсвечиваем выбранный узел
-  const isSelected = selectedUnitId === (data.org_unit_id || data.id);
-
-  const handleClick = () => {
-    // Если это конечный юнит - переходим на страницу команды
+  const handleHeaderClick = () => {
     if (isFinalUnit) {
-      const unitId = data.org_unit_id || data.id;
-      navigate(`/team/${unitId}`);
-      if (onTeamClick) {
-        onTeamClick(data);
-      }
+      navigateToTeam(data);
     } else if (hasChildren) {
-      // Для отделов с детьми - раскрытие/скрытие
-      setIsOpen(!isOpen);
+      setIsOpen(prev => !prev);
     }
   };
 
-  const handleTeamClick = (teamData) => {
-    const unitId = teamData.org_unit_id || teamData.id;
-    navigate(`/team/${unitId}`);
-    if (onTeamClick) {
-      onTeamClick(teamData);
-    }
+  const navigateToTeam = teamData => {
+    const teamId = teamData.org_unit_id || teamData.id;
+    navigate(`/team/${teamId}`);
+    onTeamClick?.(teamData);
   };
 
   return (
-    <div className={`collapsible-section collapsible-section--level-${level} ${
-      isSelected ? 'collapsible-section--selected' : ''
-    }`}
-    >
-      <div 
-        className={`collapsible-section__header ${
-          isFinalUnit ? 'collapsible-section__header--team' : ''
-        } ${hasChildren || isFinalUnit ? 'collapsible-section__header--clickable' : ''} ${
-          isSelected ? 'collapsible-section__header--selected' : ''
-        }`}
-        onClick={handleClick}
-      >
-        <div className="collapsible-section__content">
-          {hasChildren && !isFinalUnit && (
-            <div className="collapsible-section__arrow-left">
-              {isOpen ? '▼' : '▶'}
-            </div>
-          )}
-          
-          <div className="collapsible-section__info">
-            <div className="collapsible-section__name">{data.name}</div>
-            {data.unit_type && (
-              <div className="collapsible-section__type">
-                {data.unit_type}
-              </div>
-            )}
-            {isFinalUnit && (
-              <div className="collapsible-section__final-label">
-                (команда)
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {isFinalUnit && (
-          <div className="collapsible-section__team-arrow">
-            👥
-          </div>
-        )}
-      </div>
-
+    <div className={getContainerClassName(level, isSelected)}>
+      <SectionHeader
+        data={data}
+        hasChildren={hasChildren}
+        isFinalUnit={isFinalUnit}
+        isOpen={isOpen}
+        isSelected={isSelected}
+        onClick={handleHeaderClick}
+      />
+      
       {hasChildren && isOpen && (
-        <div className="collapsible-section__children">
-          {data.children.map(child => (
-            <CollapsibleSection 
-              key={child.org_unit_id || child.id}
-              data={child}
-              level={level + 1}
-              onTeamClick={handleTeamClick}
-              selectedUnitId={selectedUnitId}
-            />
-          ))}
-        </div>
+        <SectionChildren
+          data={data}
+          level={level}
+          onTeamClick={navigateToTeam}
+          selectedUnitId={selectedUnitId}
+        />
       )}
     </div>
   );
 };
+
+const getContainerClassName = (level, isSelected) => {
+  const baseClass = `collapsible-section collapsible-section--level-${level}`;
+  return isSelected ? `${baseClass} collapsible-section--selected` : baseClass;
+};
+
+const SectionHeader = ({ 
+  data, 
+  hasChildren, 
+  isFinalUnit, 
+  isOpen, 
+  isSelected, 
+  onClick,
+}) => {
+  const isClickable = hasChildren || isFinalUnit;
+
+  return (
+    <div 
+      className={getHeaderClassName(isFinalUnit, isClickable, isSelected)}
+      onClick={isClickable ? onClick : undefined}
+    >
+      <div className="collapsible-section__content">
+        {hasChildren && !isFinalUnit && (
+          <SectionArrow isOpen={isOpen} />
+        )}
+        
+        <SectionInfo 
+          data={data} 
+          isFinalUnit={isFinalUnit} 
+        />
+      </div>
+      
+      {isFinalUnit && <TeamIndicator />}
+    </div>
+  );
+};
+
+const getHeaderClassName = (isFinalUnit, isClickable, isSelected) => {
+  const baseClass = 'collapsible-section__header';
+  const modifiers = [
+    isFinalUnit && 'collapsible-section__header--team',
+    isClickable && 'collapsible-section__header--clickable', 
+    isSelected && 'collapsible-section__header--selected',
+  ].filter(Boolean).join(' ');
+
+  return `${baseClass} ${modifiers}`;
+};
+
+const SectionArrow = ({ isOpen }) => (
+  <div className="collapsible-section__arrow-left">
+    {isOpen ? '▼' : '▶'}
+  </div>
+);
+
+const SectionInfo = ({ data, isFinalUnit }) => (
+  <div className="collapsible-section__info">
+    <div className="collapsible-section__name">{data.name}</div>
+    
+    {data.unit_type && (
+      <div className="collapsible-section__type">
+        {data.unit_type}
+      </div>
+    )}
+    
+    {isFinalUnit && (
+      <div className="collapsible-section__final-label">
+        (команда)
+      </div>
+    )}
+  </div>
+);
+
+const TeamIndicator = () => (
+  <div className="collapsible-section__team-arrow">
+    👥
+  </div>
+);
+
+const SectionChildren = ({ data, level, onTeamClick, selectedUnitId }) => (
+  <div className="collapsible-section__children">
+    {data.children.map(child => (
+      <CollapsibleSection 
+        key={child.org_unit_id || child.id}
+        data={child}
+        level={level + 1}
+        onTeamClick={onTeamClick}
+        selectedUnitId={selectedUnitId}
+      />
+    ))}
+  </div>
+);
 
 export default CollapsibleSection;

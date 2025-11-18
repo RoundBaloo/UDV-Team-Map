@@ -2,14 +2,26 @@ import React from 'react';
 import CollapsibleSection from '../CollapsibleSection';
 import './DepartmentList.css';
 
-const DepartmentList = ({ data, onTeamClick, selectedUnitId }) => {
+const DATA_STRUCTURE = {
+  API: 'api',
+  MOCK: 'mock', 
+  UNKNOWN: 'unknown',
+};
+
+const DepartmentList = ({ 
+  data, 
+  onTeamClick, 
+  selectedUnitId,
+}) => {
   if (!data) {
-    return <div className="department-list--empty">Нет данных для отображения</div>;
+    return <EmptyState message="Нет данных для отображения" />;
   }
 
-  // Обрабатываем обе структуры данных - из API и моковую
-  const renderStructure = () => {
-    if ((data.org_unit_id || data.id) && data.name && data.unit_type) {
+  const dataStructure = determineDataStructure(data);
+
+  const renderContent = () => {
+    switch (dataStructure) {
+    case DATA_STRUCTURE.API:
       return (
         <CollapsibleSection 
           data={data}
@@ -18,10 +30,8 @@ const DepartmentList = ({ data, onTeamClick, selectedUnitId }) => {
           selectedUnitId={selectedUnitId}
         />
       );
-    }
     
-    // Если данные из моков (старая структура с departments)
-    if (data.departments && Array.isArray(data.departments)) {
+    case DATA_STRUCTURE.MOCK:
       return data.departments.map(department => (
         <CollapsibleSection 
           key={department.org_unit_id || department.id}
@@ -31,16 +41,38 @@ const DepartmentList = ({ data, onTeamClick, selectedUnitId }) => {
           selectedUnitId={selectedUnitId}
         />
       ));
-    }
     
-    return <div className="department-list--empty">Неизвестный формат данных</div>;
+    case DATA_STRUCTURE.UNKNOWN:
+    default:
+      return <EmptyState message="Неизвестный формат данных" />;
+    }
   };
 
   return (
     <div className="department-list">
-      {renderStructure()}
+      {renderContent()}
     </div>
   );
 };
+
+const determineDataStructure = data => {
+  const hasApiStructure = (data.org_unit_id || data.id) && data.name && data.unit_type;
+  if (hasApiStructure) {
+    return DATA_STRUCTURE.API;
+  }
+
+  const hasMockStructure = data.departments && Array.isArray(data.departments);
+  if (hasMockStructure) {
+    return DATA_STRUCTURE.MOCK;
+  }
+
+  return DATA_STRUCTURE.UNKNOWN;
+};
+
+const EmptyState = ({ message }) => (
+  <div className="department-list--empty">
+    {message}
+  </div>
+);
 
 export default DepartmentList;

@@ -14,54 +14,37 @@ const PhotoModerationItem = ({
     photo,
   } = item;
 
-  // Получаем ID модерации (новый или старый)
-  const getModerationId = () => {
-    return photo_moderation_id || id;
-  };
-
-  // Форматируем имя сотрудника
-  const getEmployeeName = () => {
-    if (employee) {
-      return `${employee.first_name} ${employee.last_name}`;
-    }
-    return `Сотрудник #${employee_id}`;
-  };
-
-  // Получаем URL фото
-  const getPhotoUrl = () => {
-    return photo?.public_url;
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const moderationId = photo_moderation_id || id;
+  const employeeName = employee 
+    ? `${employee.first_name} ${employee.last_name}`
+    : `Сотрудник #${employee_id}`;
+  const photoUrl = photo?.public_url;
 
   const handleRejectClick = () => {
-    // В коде, т.к. сказали, не нужно, бек не переписывали еще
-    const rejectReason = 'Не соотв. требованиям';
-    onReject?.(getModerationId(), rejectReason);
+    onReject?.(moderationId, 'Не соотв. требованиям');
   };
 
   const handleApproveClick = () => {
-    onApprove?.(getModerationId());
+    onApprove?.(moderationId);
+  };
+
+  const handleImageError = (e) => {
+    e.target.style.display = 'none';
+    const placeholder = e.target.nextElementSibling;
+    if (placeholder) {
+      placeholder.style.display = 'flex';
+    }
   };
 
   return (
     <div className="photo-moderation-item">
       <div className="photo-moderation-item__photo">
-        {getPhotoUrl() ? (
+        {photoUrl ? (
           <img 
-            src={getPhotoUrl()} 
-            alt={`Фото ${getEmployeeName()}`}
+            src={photoUrl} 
+            alt={`Фото ${employeeName}`}
             className="photo-moderation-item__image"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
+            onError={handleImageError}
           />
         ) : null}
         <div className="photo-moderation-item__placeholder">
@@ -70,7 +53,7 @@ const PhotoModerationItem = ({
       </div>
 
       <div className="photo-moderation-item__name">
-        {getEmployeeName()}
+        {employeeName}
       </div>
 
       <div className="photo-moderation-item__actions">
