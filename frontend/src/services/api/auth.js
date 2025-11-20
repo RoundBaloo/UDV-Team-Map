@@ -2,23 +2,19 @@ import { apiClient } from './apiClient';
 import { API_ENDPOINTS } from '../../utils/constants';
 
 export const authApi = {
-  // Логин
   login: async (email, password) => {
-    const data = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, {
+    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, {
       email,
       password,
     });
-    return data;
+    
+    return response;
   },
 
-  // Получить текущего пользователя
   getMe: async () => {
-    const data = await apiClient.get(API_ENDPOINTS.AUTH.ME);
-    return data;
+    const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+    return response;
   },
 
-  // Выход (на клиенте просто удаляем токен)
-  logout: () => {
-    return Promise.resolve();
-  },
+  logout: () => Promise.resolve(),
 };

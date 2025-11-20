@@ -1,50 +1,115 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
-export const useForm = (initialValues, onSubmit) => {
-  const [values, setValues] = useState(initialValues);
-  const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
+export const useForm = (initialValues, options = {}) => {
+  const {
+    onSubmit,
+    validate,
+    validateOnChange = true,
+  } = options;
 
-  const handleChange = (name, value) => {
-    setValues(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    
-    // Очищаем ошибку при изменении поля
-    if (errors[name]) {
-      setErrors(prev => ({
+  const [state, setState] = useState({
+    values: initialValues,
+    errors: {},
+    submitting: false,
+    touched: {},
+  });
+
+  const validateField = useCallback((name, value) => {
+    if (!validate) return '';
+
+    const fieldErrors = validate({ [name]: value });
+    return fieldErrors[name] || '';
+  }, [validate]);
+
+  const validateForm = useCallback(values => {
+    if (!validate) return {};
+    return validate(values) || {};
+  }, [validate]);
+
+  const handleChange = useCallback((name, value) => {
+    setState(prev => {
+      const newValues = { ...prev.values, [name]: value };
+      const newErrors = { ...prev.errors };
+      const newTouched = { ...prev.touched, [name]: true };
+
+      if (validateOnChange) {
+        newErrors[name] = validateField(name, value);
+      }
+
+      return {
         ...prev,
-        [name]: '',
-      }));
-    }
-  };
+        values: newValues,
+        errors: newErrors,
+        touched: newTouched,
+      };
+    });
+  }, [validateField, validateOnChange]);
 
-  const handleSubmit = async (e) => {
+  const setFieldValue = useCallback((name, value) => {
+    handleChange(name, value);
+  }, [handleChange]);
+
+  const setFieldError = useCallback((name, error) => {
+    setState(prev => ({
+      ...prev,
+      errors: { ...prev.errors, [name]: error },
+    }));
+  }, []);
+
+  const handleSubmit = async e => {
     if (e) e.preventDefault();
-    
-    setSubmitting(true);
+
+    const formErrors = validateForm(state.values);
+    const hasErrors = Object.values(formErrors).some(error => error);
+
+    if (hasErrors) {
+      setState(prev => ({
+        ...prev,
+        errors: formErrors,
+        touched: Object.keys(prev.values).reduce((acc, key) => ({
+          ...acc,
+          [key]: true,
+        }), {}),
+      }));
+      return;
+    }
+
+    setState(prev => ({ ...prev, submitting: true }));
+
     try {
-      await onSubmit(values);
+      await onSubmit?.(state.values);
     } catch (error) {
       console.error('Form submission error:', error);
+      throw error;
     } finally {
-      setSubmitting(false);
+      setState(prev => ({ ...prev, submitting: false }));
     }
   };
 
-  const reset = () => {
-    setValues(initialValues);
-    setErrors({});
-  };
+  const reset = useCallback(() => {
+    setState({
+      values: initialValues,
+      errors: {},
+      submitting: false,
+      touched: {},
+    });
+  }, [initialValues]);
+
+  const setValues = useCallback(newValues => {
+    setState(prev => ({ ...prev, values: newValues }));
+  }, []);
 
   return {
-    values,
-    errors,
-    submitting,
+    values: state.values,
+    errors: state.errors,
+    submitting: state.submitting,
+    touched: state.touched,
     handleChange,
     handleSubmit,
+    setFieldValue,
+    setFieldError,
+    setValues,
     reset,
-    setErrors,
+    isValid: Object.values(state.errors).every(error => !error),
   };
 };

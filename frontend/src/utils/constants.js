@@ -54,5 +54,20 @@ export const API_ENDPOINTS = {
   },
 };
 
+export const HTTP_ERRORS = {
+  401: 'Неавторизованный доступ',
+  403: 'Доступ запрещен', 
+  404: 'Ресурс не найден',
+  500: 'Ошибка сервера',
+  DEFAULT: 'Произошла ошибка',
+};
+
+export const API_CONFIG = {
+  DEFAULT_HEADERS: {
+    'Content-Type': 'application/json',
+  },
+  EMPTY_RESPONSE_STATUS: 204,
+};
+
 export const MAX_FILE_SIZE = 5 * 1024 * 1024;
 export const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];

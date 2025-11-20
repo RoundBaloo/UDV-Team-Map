@@ -1,86 +1,109 @@
 import { tokenStorage } from '../storage/tokenStorage';
-import { API_BASE_URL } from '../../utils/constants';
+import { API_BASE_URL, HTTP_ERRORS, API_CONFIG } from '../../utils/constants';
 
 class ApiClient {
   constructor(baseURL = API_BASE_URL) {
     this.baseURL = baseURL;
   }
 
-  // Базовый метод для HTTP запросов
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    };
+    const config = this.buildRequestConfig(options);
 
-    // Добавляем токен авторизации если есть
-    const token = tokenStorage.getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    console.log(`API Request: ${config.method} ${url}`, config);
+    this.logRequest(config.method, url, config);
 
     try {
       const response = await fetch(url, config);
-      
-      // Обрабатываем ответ
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          console.log('API Error response:', errorData);
-          
-          if (errorData.detail) {
-            if (Array.isArray(errorData.detail)) {
-              errorMessage = errorData.detail.map(err => err.msg).join(', ');
-            } else {
-              errorMessage = errorData.detail;
-            }
-          }
-        } catch (parseError) {
-          // Если не удалось распарсить JSON, используем стандартное сообщение
-          if (response.status === 401) {
-            errorMessage = 'Неавторизованный доступ';
-          } else if (response.status === 403) {
-            errorMessage = 'Доступ запрещен';
-          } else if (response.status === 404) {
-            errorMessage = 'Ресурс не найден';
-          } else if (response.status >= 500) {
-            errorMessage = 'Ошибка сервера';
-          }
-        }
-        
-        const error = new Error(errorMessage);
-        error.status = response.status;
-        throw error;
-      }
-
-      // Для пустого ответа
-      if (response.status === 204) {
-        return null;
-      }
-
-      const data = await response.json();
-      console.log(`API Response: ${config.method} ${url}`, data);
-      return data;
+      return await this.handleResponse(response, config.method, url);
     } catch (error) {
-      console.error('API request failed:', error);
+      this.logError(error);
       throw error;
     }
   }
 
-  // GET запрос
+  buildRequestConfig(options) {
+    const headers = this.buildHeaders(options.headers);
+    
+    return {
+      headers,
+      ...options,
+    };
+  }
+
+  buildHeaders(customHeaders = {}) {
+    const headers = { ...API_CONFIG.DEFAULT_HEADERS, ...customHeaders };
+    const token = tokenStorage.getToken();
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
+
+  async handleResponse(response, method, url) {
+    if (!response.ok) {
+      throw await this.handleErrorResponse(response);
+    }
+
+    if (response.status === API_CONFIG.EMPTY_RESPONSE_STATUS) {
+      return null;
+    }
+
+    const data = await response.json();
+    this.logResponse(method, url, data);
+    
+    return data;
+  }
+
+  async handleErrorResponse(response) {
+    let errorMessage = `HTTP error! status: ${response.status}`;
+    
+    try {
+      const errorData = await response.json();
+      errorMessage = this.extractErrorMessage(errorData);
+    } catch {
+      errorMessage = this.getHttpErrorMessage(response.status);
+    }
+    
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    
+    return error;
+  }
+
+  extractErrorMessage(errorData) {
+    if (!errorData.detail) {
+      return HTTP_ERRORS.DEFAULT;
+    }
+
+    if (Array.isArray(errorData.detail)) {
+      return errorData.detail.map(err => err.msg).join(', ');
+    }
+
+    return errorData.detail;
+  }
+
+  getHttpErrorMessage(status) {
+    return HTTP_ERRORS[status] || HTTP_ERRORS.DEFAULT;
+  }
+
+  logRequest(method, url, config) {
+    console.log(`API Request: ${method} ${url}`, config);
+  }
+
+  logResponse(method, url, data) {
+    console.log(`API Response: ${method} ${url}`, data);
+  }
+
+  logError(error) {
+    console.error('API request failed:', error);
+  }
+
   async get(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'GET' });
   }
 
-  // POST запрос  
   async post(endpoint, data = {}, options = {}) {
     return this.request(endpoint, {
       ...options,
@@ -89,7 +112,6 @@ class ApiClient {
     });
   }
 
-  // PATCH запрос
   async patch(endpoint, data = {}, options = {}) {
     return this.request(endpoint, {
       ...options,
@@ -98,11 +120,9 @@ class ApiClient {
     });
   }
 
-  // DELETE запрос
   async delete(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 }
 
-// Создаем экземпляр клиента
 export const apiClient = new ApiClient();

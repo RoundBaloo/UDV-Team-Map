@@ -1,30 +1,60 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export const useApi = (apiFunction, immediate = true) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(immediate);
-  const [error, setError] = useState(null);
+  const [state, setState] = useState({
+    data: null,
+    loading: immediate,
+    error: null,
+  });
+
+  const isMounted = useRef(true);
+  const executeRef = useRef();
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const execute = async (...params) => {
+    if (!isMounted.current) return;
+
     try {
-      setLoading(true);
-      setError(null);
+      setState(prev => ({ ...prev, loading: true, error: null }));
       const result = await apiFunction(...params);
-      setData(result);
+      
+      if (isMounted.current) {
+        setState({ data: result, loading: false, error: null });
+      }
+      
       return result;
     } catch (err) {
-      setError(err.message);
+      if (isMounted.current) {
+        setState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: err.message || 'Произошла ошибка',
+        }));
+      }
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
+
+  executeRef.current = execute;
 
   useEffect(() => {
     if (immediate) {
       execute();
     }
-  }, []);
+  }, [immediate]);
 
-  return { data, loading, error, execute };
+  const refetch = () => {
+    executeRef.current?.();
+  };
+
+  return { 
+    ...state, 
+    execute, 
+    refetch,
+  };
 };

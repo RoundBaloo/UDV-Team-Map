@@ -1,94 +1,78 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Header from '../../components/common/Header';
-import Breadcrumbs from '../../components/common/Breadcrumbs';
 import AdminTable from '../../components/admin/AdminTable';
-import { mockEmployee, mockCurrentUser, mockEmployeesByUnit } from '../../utils/mockData';
+import { useAdminUsers } from '../../hooks/useAdminUsers';
+import { 
+  getLegalEntity, 
+  WORK_FORMAT_MAP, 
+  GRADE_OPTIONS, 
+  WORK_FORMAT_OPTIONS,
+} from '../../utils/adminUsersConfig.js';
 import './AdminUsersTable.css';
 
 const AdminUsersTable = () => {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [editedUser, setEditedUser] = useState({});
+  const {
+    users,
+    loading,
+    editingId,
+    editedUser,
+    handleEdit,
+    handleSave,
+    handleCancel,
+    handleFieldChange,
+  } = useAdminUsers();
 
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        // Имитация загрузки данных
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Собираем всех пользователей из моков
-        const allUsers = [];
-        
-        // Добавляем базовых пользователей
-        allUsers.push(mockEmployee, mockCurrentUser);
-        
-        // Добавляем пользователей из всех подразделений
-        Object.values(mockEmployeesByUnit).forEach(unitUsers => {
-          allUsers.push(...unitUsers);
-        });
-        
-        // Убираем дубликаты по ID
-        const uniqueUsers = allUsers.filter((user, index, self) => 
-          index === self.findIndex(u => u.id === user.id)
-        );
-        
-        setUsers(uniqueUsers);
-      } catch (error) {
-        console.error('Error loading users:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUsers();
-  }, []);
-
-  const handleEdit = (user) => {
-    setEditingId(user.id);
-    setEditedUser({ 
-      ...user,
-      // Добавляем поля, которые могут редактироваться
-      work_city: user.work_city || '',
-      work_format: user.work_format || 'office',
-      grade: user.grade || '',
-    });
+  const getGradeCell = row => {
+    if (editingId === row.id) {
+      return (
+        <select
+          value={editedUser.grade || ''}
+          onChange={e => handleFieldChange('grade', e.target.value)}
+          className="inline-select"
+        >
+          {GRADE_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    return row.grade || 'Не указан';
   };
 
-  const handleSave = (id) => {
-    setUsers(prevUsers => 
-      prevUsers.map(user => 
-        user.id === id ? { ...user, ...editedUser } : user
-      )
-    );
-    setEditingId(null);
-    setEditedUser({});
+  const getWorkCityCell = row => {
+    if (editingId === row.id) {
+      return (
+        <input
+          type="text"
+          value={editedUser.work_city || ''}
+          onChange={e => handleFieldChange('work_city', e.target.value)}
+          className="inline-input"
+          placeholder="Город"
+        />
+      );
+    }
+    return row.work_city || '-';
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditedUser({});
-  };
-
-  const handleFieldChange = (field, value) => {
-    setEditedUser(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  // Функция для получения юридического лица по email
-  const getLegalEntity = (email) => {
-    if (!email) return '-';
-    if (email.includes('trinitydata')) return 'ТриниДата';
-    if (email.includes('vneocheredi')) return 'ВНЕ ОЧЕРЕДИ';
-    if (email.includes('ft-soft')) return 'ФТ-СОФТ';
-    if (email.includes('kit.ru')) return 'КИТ';
-    if (email.includes('kit-r.ru')) return 'КИТ.Р';
-    if (email.includes('cyberlimfa')) return 'Сайберлимфа';
-    if (email.includes('vitrops')) return 'Витропс';
-    if (email.includes('udv-group')) return 'UDV Group';
-    return '-';
+  const getWorkFormatCell = row => {
+    if (editingId === row.id) {
+      return (
+        <select
+          value={editedUser.work_format || 'office'}
+          onChange={e => handleFieldChange('work_format', e.target.value)}
+          className="inline-select"
+        >
+          {WORK_FORMAT_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    return WORK_FORMAT_MAP[row.work_format] || row.work_format || '-';
   };
 
   const columns = [
@@ -105,94 +89,35 @@ const AdminUsersTable = () => {
       key: 'legal_entity',
       title: 'Юр лицо',
       sortable: true,
-      render: (value, row) => {
-        return getLegalEntity(row.email);
-      },
+      render: (value, row) => getLegalEntity(row.email),
     },
     {
       key: 'title',
       title: 'Должность',
       sortable: true,
-      render: (value, row) => {
-        return value || '-';
-      },
+      render: value => value || '-',
     },
     {
       key: 'grade',
       title: 'Грейд',
       sortable: true,
-      render: (value, row) => {
-        if (editingId === row.id) {
-          return (
-            <select
-              value={editedUser.grade || ''}
-              onChange={(e) => handleFieldChange('grade', e.target.value)}
-              className="inline-select"
-            >
-              <option value="">Не указан</option>
-              <option value="Intern">Intern</option>
-              <option value="Junior">Junior</option>
-              <option value="Middle">Middle</option>
-              <option value="Senior">Senior</option>
-              <option value="Lead">Lead</option>
-              <option value="Principal">Principal</option>
-            </select>
-          );
-        }
-        return value || 'Не указан';
-      },
+      render: (value, row) => getGradeCell(row),
     },
     {
       key: 'work_city',
       title: 'Город',
       sortable: true,
-      render: (value, row) => {
-        if (editingId === row.id) {
-          return (
-            <input
-              type="text"
-              value={editedUser.work_city || ''}
-              onChange={(e) => handleFieldChange('work_city', e.target.value)}
-              className="inline-input"
-              placeholder="Город"
-            />
-          );
-        }
-        return value || '-';
-      },
+      render: (value, row) => getWorkCityCell(row),
     },
     {
       key: 'work_format',
       title: 'Формат работы',
       sortable: true,
-      render: (value, row) => {
-        if (editingId === row.id) {
-          return (
-            <select
-              value={editedUser.work_format || 'office'}
-              onChange={(e) => handleFieldChange('work_format', e.target.value)}
-              className="inline-select"
-            >
-              <option value="office">Офис</option>
-              <option value="hybrid">Гибрид</option>
-              <option value="remote">Удаленно</option>
-            </select>
-          );
-        }
-        
-        const formatMap = {
-          'office': 'Офис',
-          'hybrid': 'Гибрид', 
-          'remote': 'Удаленно',
-        };
-        
-        return formatMap[value] || value || '-';
-      },
+      render: (value, row) => getWorkFormatCell(row),
     },
   ];
 
-  // Функция для рендеринга действий
-  const renderActions = (row) => {
+  const renderActions = row => {
     if (editingId === row.id) {
       return (
         <div className="inline-actions">
@@ -213,6 +138,7 @@ const AdminUsersTable = () => {
         </div>
       );
     }
+
     return (
       <button
         className="btn btn-primary btn-sm"
@@ -227,7 +153,6 @@ const AdminUsersTable = () => {
   return (
     <div className="admin-users-page">
       <Header />
-      {/* <Breadcrumbs /> */}
       
       <main className="admin-users-main">
         <div className="container">

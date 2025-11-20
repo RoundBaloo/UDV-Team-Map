@@ -1,123 +1,110 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
+import Breadcrumbs from '../../components/common/Breadcrumbs';
 import DepartmentList from '../../components/org-structure/DepartmentList';
 import { orgUnitsApi } from '../../services/api/orgUnits';
 import { mockOrgStructure } from '../../utils/mockData';
+import { findPathToNode } from '../../utils/helpers';
 import './OrgStructure.css';
 
+const STORAGE_KEYS = {
+  SELECTED_UNIT: 'selectedOrgUnit',
+};
+
 const OrgStructure = () => {
-  const [orgData, setOrgData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedUnitId, setSelectedUnitId] = useState(null);
+  const [state, setState] = useState({
+    orgData: null,
+    loading: true,
+    error: null,
+    selectedUnitId: null,
+  });
 
   useEffect(() => {
     loadData();
   }, []);
 
-  // Проверяем выбранный узел из хлебных крошек
   useEffect(() => {
-    const checkSelectedUnit = () => {
-      try {
-        const savedUnit = sessionStorage.getItem('selectedOrgUnit');
-        if (savedUnit) {
-          const unit = JSON.parse(savedUnit);
-          setSelectedUnitId(unit.org_unit_id || unit.id);
-          // Очищаем storage после использования
-          sessionStorage.removeItem('selectedOrgUnit');
-        }
-      } catch (error) {
-        console.error('Error processing selected unit:', error);
-      }
-    };
-
-    if (!loading && orgData) {
+    if (!state.loading && state.orgData) {
       checkSelectedUnit();
     }
-  }, [loading, orgData]);
+  }, [state.loading, state.orgData]);
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setState(prev => ({ ...prev, loading: true, error: null }));
       
-      // Пробуем загрузить данные с бэкенда
       const data = await orgUnitsApi.getOrgStructure();
       console.log('Org structure from API:', data);
-      setOrgData(data);
+      setState(prev => ({ ...prev, orgData: data }));
       
     } catch (err) {
       console.error('Error loading org structure from API:', err);
-      setError('Не удалось загрузить структуру из базы данных');
       
-      // Используем моки как fallback
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Не удалось загрузить структуру из базы данных',
+        orgData: mockOrgStructure,
+      }));
       console.log('Using mock data as fallback');
-      setOrgData(mockOrgStructure);
     } finally {
-      setLoading(false);
+      setState(prev => ({ ...prev, loading: false }));
     }
   };
 
-  const handleTeamClick = (teamData) => {
+  const checkSelectedUnit = () => {
+    try {
+      const savedUnit = sessionStorage.getItem(STORAGE_KEYS.SELECTED_UNIT);
+      if (savedUnit) {
+        const unit = JSON.parse(savedUnit);
+        setState(prev => ({ 
+          ...prev, 
+          selectedUnitId: unit.org_unit_id || unit.id,
+        }));
+        sessionStorage.removeItem(STORAGE_KEYS.SELECTED_UNIT);
+      }
+    } catch (error) {
+      console.error('Error processing selected unit:', error);
+    }
+  };
+
+  const handleTeamClick = teamData => {
     console.log('Team clicked:', teamData);
-    // Логика обработки клика по команде
   };
 
-  // Функция для передачи выбранного узла в DepartmentList
-  const getEnhancedOrgData = () => {
-    if (!orgData) return null;
-    
-    // Добавляем информацию о выбранном узле к данным
-    return {
-      ...orgData,
-      _selectedUnitId: selectedUnitId,
-    };
+  const handleRetry = () => {
+    loadData();
   };
 
-  if (loading) {
-    return (
-      <div className="org-structure-page">
-        <Header />
-        {/* <Breadcrumbs /> */}
-        <main className="org-structure-main">
-          <div className="container">
-            <div className="loading-placeholder">
-              Загрузка организационной структуры...
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+  const getBreadcrumbPath = () => {
+    const { selectedUnitId, orgData } = state;
+    if (selectedUnitId && orgData) {
+      const path = findPathToNode(orgData, selectedUnitId);
+      return path || [];
+    }
+    return [];
+  };
+
+  if (state.loading) {
+    return <LoadingState />;
   }
 
   return (
     <div className="org-structure-page">
       <Header />
-      {/* <Breadcrumbs customPath={getBreadcrumbPath()} />  */}
+      <Breadcrumbs customPath={getBreadcrumbPath()} />
       
       <main className="org-structure-main">
         <div className="container">
-          <div className="org-structure-header">
-            <h1>Организационная структура</h1>
-            {error && (
-              <div className="alert alert-warning">
-                {error}
-                <button 
-                  className="btn btn-secondary btn-sm"
-                  onClick={loadData}
-                  style={{ marginLeft: '10px' }}
-                >
-                  Повторить
-                </button>
-              </div>
-            )}
-          </div>
+          <OrgStructureHeader 
+            error={state.error}
+            onRetry={handleRetry}
+          />
           
           <div className="card">
             <DepartmentList 
-              data={getEnhancedOrgData()} 
+              data={state.orgData} 
               onTeamClick={handleTeamClick}
-              selectedUnitId={selectedUnitId}
+              selectedUnitId={state.selectedUnitId}
             />
           </div>
         </div>
@@ -125,5 +112,36 @@ const OrgStructure = () => {
     </div>
   );
 };
+
+const LoadingState = () => (
+  <div className="org-structure-page">
+    <Header />
+    <main className="org-structure-main">
+      <div className="container">
+        <div className="loading-placeholder">
+          Загрузка организационной структуры...
+        </div>
+      </div>
+    </main>
+  </div>
+);
+
+const OrgStructureHeader = ({ error, onRetry }) => (
+  <div className="org-structure-header">
+    <h1>Организационная структура</h1>
+    {error && (
+      <div className="alert alert-warning">
+        {error}
+        <button 
+          className="btn btn-secondary btn-sm"
+          onClick={onRetry}
+          style={{ marginLeft: '10px' }}
+        >
+          Повторить
+        </button>
+      </div>
+    )}
+  </div>
+);
 
 export default OrgStructure;

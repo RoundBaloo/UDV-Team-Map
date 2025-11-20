@@ -1,7 +1,6 @@
 import { apiClient } from './apiClient';
 
 export const healthApi = {
-  // Проверка доступности API
   checkHealth: async () => {
     try {
       const response = await apiClient.get('/health');
@@ -19,7 +18,6 @@ export const healthApi = {
     }
   },
 
-  // Проверка аутентификации
   checkAuth: async () => {
     try {
       const response = await apiClient.get('/api/v1/auth/me');

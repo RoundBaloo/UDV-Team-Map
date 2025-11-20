@@ -1,41 +1,47 @@
 import { apiClient } from './apiClient';
 import { API_ENDPOINTS } from '../../utils/constants';
+import { buildEndpoint, buildQueryString } from '../../utils/apiHelpers';
+
+const EMPLOYEES_ENDPOINTS = API_ENDPOINTS.EMPLOYEES;
 
 export const employeesApi = {
-  // Получить список сотрудников
   getEmployees: async (params = {}) => {
-    const queryParams = new URLSearchParams(params).toString();
-    const endpoint = queryParams 
-      ? `${API_ENDPOINTS.EMPLOYEES.LIST}?${queryParams}`
-      : API_ENDPOINTS.EMPLOYEES.LIST;
+    const queryString = buildQueryString(params);
+    const endpoint = `${EMPLOYEES_ENDPOINTS.LIST}${queryString}`;
     
-    const data = await apiClient.get(endpoint);
-    return data;
+    const response = await apiClient.get(endpoint);
+    return response;
   },
 
-  // Получить сотрудника по ID
-  getEmployee: async (employeeId) => {
-    const endpoint = API_ENDPOINTS.EMPLOYEES.DETAIL.replace('{employee_id}', employeeId.toString());
-    const data = await apiClient.get(endpoint);
-    return data;
+  getEmployee: async employeeId => {
+    const endpoint = buildEndpoint(EMPLOYEES_ENDPOINTS.DETAIL, {
+      employee_id: employeeId,
+    });
+    
+    const response = await apiClient.get(endpoint);
+    return response;
   },
 
-  // Получить текущего пользователя
   getCurrentEmployee: async () => {
-    const data = await apiClient.get(API_ENDPOINTS.EMPLOYEES.ME);
-    return data;
+    const response = await apiClient.get(EMPLOYEES_ENDPOINTS.ME);
+    return response;
   },
 
-  // Обновить данные текущего пользователя
-  updateMe: async (employeeData) => {
-    const data = await apiClient.patch(API_ENDPOINTS.EMPLOYEES.ME, employeeData);
-    return data;
+  updateMe: async employeeData => {
+    const response = await apiClient.patch(
+      EMPLOYEES_ENDPOINTS.ME, 
+      employeeData,
+    );
+    
+    return response;
   },
 
-  // Обновить данные сотрудника (админ)
   updateEmployee: async (employeeId, employeeData) => {
-    const endpoint = API_ENDPOINTS.EMPLOYEES.DETAIL.replace('{employee_id}', employeeId.toString());
-    const data = await apiClient.patch(endpoint, employeeData);
-    return data;
+    const endpoint = buildEndpoint(EMPLOYEES_ENDPOINTS.DETAIL, {
+      employee_id: employeeId,
+    });
+    
+    const response = await apiClient.patch(endpoint, employeeData);
+    return response;
   },
 };
