@@ -44,6 +44,7 @@ class EmployeeDetail(BaseModel):
 
     work_phone: str | None = None
     mattermost_handle: str | None = None
+    telegram_handle: str | None = None
 
     birth_date: date | None = None
     hire_date: date | None = None
@@ -70,8 +71,8 @@ class EmployeeSelfUpdate(BaseModel):
 
     work_phone: str | None = None
     mattermost_handle: str | None = None
+    telegram_handle: str | None = None
     birth_date: date | None = None
-    photo_id: PositiveInt | None = None
 
     work_city: str | None = None
     work_format: str | None = Field(
@@ -80,7 +81,6 @@ class EmployeeSelfUpdate(BaseModel):
     )
     time_zone: str | None = None
 
-    # По нашему решению даём редактировать сотруднику
     hire_date: date | None = None
 
 
@@ -95,6 +95,7 @@ class EmployeeAdminUpdate(BaseModel):
 
     work_phone: str | None = None
     mattermost_handle: str | None = None
+    telegram_handle: str | None = None
     birth_date: date | None = None
     work_city: str | None = None
     work_format: str | None = Field(

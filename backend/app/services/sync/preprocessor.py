@@ -1,6 +1,28 @@
-# Пока работает с JSON-подобными структурами из AD, в
-# дальнейшем этот файл будет преобразовывать в нужный для
-# normalizer.py формат реальные данные из AD
+# так как мы знаем формат приходящего файла, то настраиваем препроцессинг
+# под него. В будущем, будет изменено на ad, пока формат такой
+"""Препроцессинг входных данных синхронизации сотрудников.
+
+Ожидаемый формат payload из JSON-файла:
+
+[
+  {
+    "external_ref": "E1001",
+    "email": "ivan.petrov@example.com",
+    "first_name": "Иван",
+    "middle_name": "Петрович",
+    "last_name": "Петров",
+    "title": "Backend Developer",
+    "manager_external_ref": "E1003",
+    "company": "UDV Group",
+    "department": "Платформа",
+    "is_admin": false,
+    "password_hash": "...bcrypt..."
+  },
+  ...
+]
+
+Т. е. просто JSON-массив словарей. Любой другой формат считается ошибкой.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +46,7 @@ def _lower_str(value: str | None) -> str | None:
 
 
 def _to_raw_employee(item: dict[str, Any]) -> RawEmployeeAD:
-    """Преобразует элемент словаря AD в RawEmployeeAD без сложной логики."""
+    """Преобразует один элемент JSON в RawEmployeeAD без сложной логики."""
     return RawEmployeeAD(
         external_ref=_clean_str(item.get("external_ref")),
         email=_lower_str(item.get("email")),
@@ -35,31 +57,30 @@ def _to_raw_employee(item: dict[str, Any]) -> RawEmployeeAD:
         company=_clean_str(item.get("company")),
         department=_clean_str(item.get("department")),
         manager_external_ref=_clean_str(item.get("manager_external_ref")),
-        manager_full_name=_clean_str(item.get("manager_full_name")),
+        password_hash=_clean_str(item.get("password_hash")),
         raw=item,
     )
 
 
 def preprocess_ad_payload(payload: Any) -> list[RawEmployeeAD]:
-    """Приводит произвольный payload к списку RawEmployeeAD.
+    """Приводит payload к списку RawEmployeeAD.
 
-    Поддерживаемые варианты:
-      - dict (одна запись)
-      - list[dict] (много записей)
-      - обёртки вида {"items": [...]}, {"employees": [...]}, {"data": [...]}
+    Сейчас поддерживаем только один формат:
+    - payload должен быть list[dict], как в примере JSON выше.
+
+    Любой другой формат считаем ошибкой.
     """
     if payload is None:
         return []
 
-    if isinstance(payload, dict):
-        for key in ("items", "employees", "data"):
-            if isinstance(payload.get(key), list):
-                return [
-                    _to_raw_employee(x) for x in payload[key] if isinstance(x, dict)
-                ]
-        return [_to_raw_employee(payload)]
+    if not isinstance(payload, list):
+        raise ValueError(
+            "preprocess_ad_payload: ожидается JSON-массив сотрудников (list[dict])."
+        )
 
-    if isinstance(payload, list):
-        return [_to_raw_employee(x) for x in payload if isinstance(x, dict)]
+    result: list[RawEmployeeAD] = []
+    for item in payload:
+        if isinstance(item, dict):
+            result.append(_to_raw_employee(item))
 
-    raise ValueError("preprocess_ad_payload: ожидаются dict / list[dict]")
+    return result

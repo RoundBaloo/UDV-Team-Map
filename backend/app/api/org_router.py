@@ -11,10 +11,10 @@ from app.models.employee import Employee
 from app.schemas.common import ErrorCode, ErrorResponse
 from app.schemas.employee import EmployeeDetail, ManagerInfo, OrgUnitInfo
 from app.schemas.media import MediaInfo
-from app.schemas.org_structure import OrgNode
+from app.schemas.org_structure import OrgNode, OrgUnitSearchItem
 from app.services.employee_service import search_employees
 from app.services.media_service import resolve_media_public_url
-from app.services.org_unit_service import build_org_tree
+from app.services.org_unit_service import build_org_tree, search_org_units
 from app.utils.encoding import validate_utf8_or_raise
 
 router = APIRouter(
@@ -41,11 +41,74 @@ async def get_org_structure(
     """
     try:
         return await build_org_tree(session)
-    except ValueError as e:
+    except ValueError as exc:
         raise HTTPException(
             status_code=404,
-            detail=str(e),
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/search",
+    response_model=list[OrgUnitSearchItem],
+    summary="Поиск по орг-юнитам",
+)
+async def search_org_units_endpoint(
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Поисковая строка по названию орг-юнита. "
+            "Если не задана - возвращаем все подходящие узлы."
+        ),
+    ),
+    domain_id: int | None = Query(
+        default=None,
+        description=(
+            "Фильтр по домену: id org_unit с unit_type='domain'. "
+            "Возвращаем только те узлы, у которых в path есть этот домен."
+        ),
+    ),
+    legal_entity_id: int | None = Query(
+        default=None,
+        description=(
+            "Фильтр по юр. лицу: id org_unit с unit_type='legal_entity'. "
+            "Возвращаем только те узлы, у которых в path есть это юр. лицо."
+        ),
+    ),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[OrgUnitSearchItem]:
+    """Поиск по орг-юнитам с поддержкой фильтров по домену и юр. лицу.
+
+    Логика:
+
+    * Если q задан:
+        - используем поиск по похожести имени (unaccent + lower + trigram),
+          возвращаем релевантные юниты, отсортированные по similarity и имени.
+    * Если q не задан:
+        - возвращаем все подходящие орг-юниты (без LIMIT, как ты хотел).
+
+    Фильтры domain_id и legal_entity_id работают по path:
+    если в цепочке от корня до узла есть домен / юр. лицо с указанным id,
+    узел попадает в выборку.
+    """
+    validate_utf8_or_raise(q)
+
+    try:
+        return await search_org_units(
+            session=session,
+            q=q,
+            domain_id=domain_id,
+            legal_entity_id=legal_entity_id,
         )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.single(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Неожиданная ошибка: {exc}",
+                status=500,
+            ).model_dump(),
+        ) from exc
 
 
 @router.get("/{org_unit_id}/employees", response_model=list[EmployeeDetail])
@@ -138,7 +201,6 @@ async def list_unit_employees(
     validate_utf8_or_raise(q)
 
     try:
-        # 1) получаем список найденных сотрудников
         employees = await search_employees(
             session=session,
             q=q,
@@ -148,7 +210,6 @@ async def list_unit_employees(
         if not ids:
             return []
 
-        # 2) рефетчим полные сущности одним запросом с eager-загрузкой связей
         full_rows = await session.execute(
             select(Employee)
             .where(Employee.id.in_(ids))
@@ -159,7 +220,6 @@ async def list_unit_employees(
         )
         by_id = {e.id: e for e in full_rows.scalars().all()}
 
-        # 3) собираем ответ строго в исходном порядке ids
         items: list[EmployeeDetail] = []
         for eid in ids:
             employee = by_id.get(eid)
@@ -167,12 +227,12 @@ async def list_unit_employees(
                 items.append(await _to_detail(employee))
 
         return items
-    except Exception as ex:
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.single(
                 code=ErrorCode.INTERNAL_ERROR,
-                message=f"Неожиданная ошибка: {ex}",
+                message=f"Неожиданная ошибка: {exc}",
                 status=500,
             ).model_dump(),
-        )
+        ) from exc

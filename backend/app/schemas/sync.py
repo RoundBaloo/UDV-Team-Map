@@ -4,14 +4,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-# =====  RAW payload из AD (только сотрудники)  =====
-
 
 class RawEmployeeAD(BaseModel):
     """Сырой сотрудник из AD (без строгой валидации email-домена)."""
-
-    # Упрощённая схема: email — просто строка (без EmailStr),
-    # чтобы пропускать локальные домены типа "udv.local".
     external_ref: str | None = None
     email: str
     first_name: str
@@ -23,7 +18,8 @@ class RawEmployeeAD(BaseModel):
     company: str | None = None
     department: str | None = None
 
-    # Для отладки — исходник как есть
+    password_hash: str | None = None
+
     raw: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("email")
@@ -41,6 +37,7 @@ class RawEmployeeAD(BaseModel):
         "department",
         "external_ref",
         "manager_external_ref",
+        "password_hash",
     )
     @classmethod
     def _strip_text(cls, v: str | None) -> str | None:
@@ -54,9 +51,6 @@ class RawEmployeeAD(BaseModel):
 __all__ = ["RawEmployeeAD"]
 
 
-# =====  Ссылка на орг-юнит по названию и типу  =====
-
-
 class OrgUnitRef(BaseModel):
     """Ссылка на узел оргструктуры по названию и типу.
 
@@ -65,11 +59,7 @@ class OrgUnitRef(BaseModel):
     """
 
     name: str
-    # Не жёстко валидируем здесь, чтобы не плодить несоответствий с БД.
     unit_type: str
-
-
-# =====  Нормализованный сотрудник, готовый к применению  =====
 
 
 class NormalizedEmployee(BaseModel):
@@ -90,18 +80,12 @@ class NormalizedEmployee(BaseModel):
 
     title: str | None = None
 
-    # Путь оргструктуры (от верхнего к нижнему).
     org_path: list[OrgUnitRef] = Field(default_factory=list)
 
-    # Менеджер — используем внешний id; ФИО оставляем "на вырост".
     manager_external_ref: str | None = None
     manager_full_name: str | None = None
 
-    # Системные поля
     received_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# =====  Обёртки запросов  =====
 
 
 class SyncEmployeesIngestRequest(BaseModel):

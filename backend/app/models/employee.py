@@ -77,6 +77,7 @@ class Employee(Base):
 
     work_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     mattermost_handle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telegram_handle: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     hire_date: Mapped[date | None] = mapped_column(Date, nullable=True)

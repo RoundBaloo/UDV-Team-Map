@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+
+from app.schemas.sync import RawEmployeeAD
 
 
 @dataclass
 class NormalizedEmployee:
-    """Нормализованный сотрудник для слоя синхронизации AD → БД."""
+    """Нормализованный сотрудник для слоя синхронизации AD → БД.
+
+    На этом уровне считаем, что:
+      - все строки уже очищены и нормализованы на этапе препроцессинга;
+      - структура данных фиксирована (RawEmployeeAD).
+    Задача нормализатора – свернуть Pydantic-модель в лёгкий dataclass,
+    с которым удобно работать в runner / repository.
+    """
 
     external_ref: str | None
     email: str
@@ -17,60 +25,24 @@ class NormalizedEmployee:
     manager_external_ref: str | None
     company: str | None
     department: str | None
-    # Готовим почву под синхронизацию паролей
     password_hash: str | None = None
 
 
-def _clean_str(value: Any) -> str | None:
-    """Очищает строку: strip, пустые строки приводит к None."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        value = value.strip()
-        return value or None
-    return str(value)
+def normalize_employee(raw: RawEmployeeAD) -> NormalizedEmployee:
+    """Преобразует RawEmployeeAD в NormalizedEmployee без дополнительной очистки.
 
-
-def normalize_employee(raw: Any) -> NormalizedEmployee:
-    """Нормализует данные сотрудника из сырого словаря/Pydantic-модели.
-
-    Принимает уже приведённый препроцессором словарь (или Pydantic-модель
-    с методом model_dump), в котором ключи ровно такие:
-
-      - external_ref, email, first_name, middle_name, last_name, title,
-        manager_external_ref, company, department, (опц.) password_hash
-
-    Возвращает экземпляр NormalizedEmployee.
+    Ожидается, что на вход всегда приходит результат работы препроцессора.
     """
-    # Допускаем как dict, так и Pydantic-модель
-    if hasattr(raw, "model_dump"):
-        d: Mapping[str, Any] = raw.model_dump()
-    elif isinstance(raw, dict):
-        d = raw
-    else:
-        raise TypeError("normalize_employee expects dict or pydantic model")
-
-    # Мягкая очистка строк (strip, пустые -> None)
-    external_ref = _clean_str(d.get("external_ref"))
-    email = _clean_str(d.get("email")) or ""  # email обязателен
-    first_name = _clean_str(d.get("first_name")) or ""
-    middle_name = _clean_str(d.get("middle_name"))
-    last_name = _clean_str(d.get("last_name")) or ""
-    title = _clean_str(d.get("title"))
-    manager_external_ref = _clean_str(d.get("manager_external_ref"))
-    company = _clean_str(d.get("company"))
-    department = _clean_str(d.get("department"))
-    password_hash = _clean_str(d.get("password_hash"))
-
     return NormalizedEmployee(
-        external_ref=external_ref,
-        email=email,
-        first_name=first_name,
-        middle_name=middle_name,
-        last_name=last_name,
-        title=title,
-        manager_external_ref=manager_external_ref,
-        company=company,
-        department=department,
-        password_hash=password_hash,
+        external_ref=raw.external_ref,
+        email=raw.email,
+        first_name=raw.first_name,
+        middle_name=raw.middle_name,
+        last_name=raw.last_name,
+        title=raw.title,
+        manager_external_ref=raw.manager_external_ref,
+        company=raw.company,
+        department=raw.department,
+        # password_hash может не быть в схеме, поэтому через getattr
+        password_hash=getattr(raw, "password_hash", None),
     )

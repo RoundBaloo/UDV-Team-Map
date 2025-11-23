@@ -26,6 +26,23 @@ class SyncSummary(dict):
         self[key] = int(self.get(key, 0)) + delta
 
 
+class OrphanedPendingError(Exception):
+    """Есть нерешенные orphaned-сотрудники, синхронизацию запускать нельзя."""
+
+
+async def _has_unresolved_orphaned(session: AsyncSession) -> bool:
+    """Проверяет наличие строк orphaned без decision в sync_record."""
+    res = await session.execute(
+        select(SyncRecord.id)
+        .where(
+            SyncRecord.status == "orphaned",
+            SyncRecord.decision.is_(None),
+        )
+        .limit(1),
+    )
+    return res.scalar_one_or_none() is not None
+
+
 async def _detect_intended_action(
     session: AsyncSession,
     *,
@@ -47,7 +64,16 @@ async def run_employee_sync(
     payload: Any,
     trigger: str = "manual",
 ) -> dict[str, int]:
-    """Запускает полную синхронизацию сотрудников из AD."""
+    """Запускает полную синхронизацию сотрудников из AD.
+
+    Перед запуском проверяет наличие нерешенных orphaned-записей и
+    при их наличии выбрасывает OrphanedPendingError.
+    """
+    if await _has_unresolved_orphaned(session):
+        raise OrphanedPendingError(
+            "Cannot start sync while there are orphaned employees without decision.",
+        )
+
     job = SyncJob(
         trigger=trigger,
         status="running",
@@ -151,7 +177,7 @@ async def run_employee_sync(
                     if n.external_ref:
                         by_external[n.external_ref] = emp.id
 
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     summary.inc("errors")
                     session.add(
                         SyncRecord(
@@ -228,7 +254,7 @@ async def run_employee_sync(
         await session.commit()
         return dict(summary)
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         await session.rollback()
         job.status = "error"
         job.finished_at = datetime.now(timezone.utc)
