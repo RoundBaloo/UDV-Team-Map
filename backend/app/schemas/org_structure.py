@@ -1,9 +1,8 @@
 from __future__ import annotations
+
 """Pydantic-схемы для представления оргструктуры и результатов поиска по орг-юнитам."""
 
-from typing import List
-
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrgNode(BaseModel):
@@ -28,7 +27,7 @@ class OrgNode(BaseModel):
             "Тип: group / domain / legal_entity / department / direction"
         ),
     )
-    children: List["OrgNode"] = Field(
+    children: list["OrgNode"] = Field(
         default_factory=list,
         description="Дочерние подразделения",
     )
@@ -75,6 +74,30 @@ class OrgUnitSearchItem(BaseModel):
     has_children: bool = Field(
         description="Есть ли активные дочерние орг-юниты",
     )
-    path: List[OrgPathItem] = Field(
+    path: list[OrgPathItem] = Field(
         description="Путь от корня оргструктуры до данного узла",
     )
+
+
+class DomainItem(BaseModel):
+    """Краткая информация о домене (unit_type='domain')."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(
+        serialization_alias="org_unit_id",
+        description="ID org_unit домена",
+    )
+    name: str = Field(description="Название домена")
+
+
+class LegalEntityItem(BaseModel):
+    """Краткая информация о юр. лице (unit_type='legal_entity')."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(
+        serialization_alias="org_unit_id",
+        description="ID org_unit юр. лица",
+    )
+    name: str = Field(description="Название юр. лица")

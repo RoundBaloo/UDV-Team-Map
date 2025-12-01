@@ -17,12 +17,16 @@ from app.schemas.employee import (
     EmployeeSelfUpdate,
     ManagerInfo,
     OrgUnitInfo,
+    SkillOption,
+    TitleItem,
 )
 from app.schemas.media import MediaInfo
 from app.services.employee_service import (
     apply_admin_update,
     apply_self_update,
     search_employees,
+    search_skill_names,
+    search_titles,
 )
 from app.services.media_service import resolve_media_public_url
 from app.utils.encoding import validate_utf8_or_raise
@@ -38,17 +42,14 @@ async def _build_employee_detail_by_id(
     employee_id: int,
     session: AsyncSession,
 ) -> EmployeeDetail:
-    """Формирует детализированную карточку сотрудника по id.
+    """Формирует детализированную карточку сотрудника по идентификатору.
 
     Args:
         employee_id: Идентификатор сотрудника.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        Полная карточка сотрудника.
-
-    Raises:
-        HTTPException: Если сотрудник не найден.
+        Детализированная информация о сотруднике.
     """
     db_emp = (
         await session.execute(
@@ -110,6 +111,7 @@ async def _build_employee_detail_by_id(
         time_zone=db_emp.time_zone,
         work_phone=db_emp.work_phone,
         mattermost_handle=db_emp.mattermost_handle,
+        telegram_handle=db_emp.telegram_handle,
         birth_date=db_emp.birth_date,
         hire_date=db_emp.hire_date,
         bio=db_emp.bio,
@@ -123,6 +125,53 @@ async def _build_employee_detail_by_id(
     )
 
 
+def _parse_skill_filters(raw_skills: list[str] | None) -> dict[str, int] | None:
+    """Парсит query-параметр навыков в словарь {name: level}.
+
+    Формат элемента списка: "<skill_name>:<level>", где:
+    * skill_name — строка;
+    * level — int в диапазоне 1..5.
+
+    Используются не более трёх навыков.
+    Некорректный ввод игнорируется.
+
+    Args:
+        raw_skills: Список строковых представлений навыков и уровней.
+
+    Returns:
+        Словарь вида {название_навыка: уровень} или None.
+    """
+    if not raw_skills:
+        return None
+
+    result: dict[str, int] = {}
+    for item in raw_skills:
+        if not item:
+            continue
+
+        if ":" not in item:
+            continue
+
+        name_part, level_part = item.split(":", 1)
+        name = name_part.strip()
+        if not name:
+            continue
+
+        try:
+            level = int(level_part)
+        except ValueError:
+            continue
+
+        if level < 1 or level > 5:
+            continue
+
+        result[name] = level
+        if len(result) >= 3:
+            break
+
+    return result or None
+
+
 @router.get("/me", response_model=EmployeeDetail)
 async def get_me(
     session: AsyncSession = Depends(get_async_session),
@@ -132,10 +181,10 @@ async def get_me(
 
     Args:
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь.
+        current_user: Текущий аутентифицированный пользователь.
 
     Returns:
-        Полная карточка текущего пользователя.
+        Детализированная информация о текущем пользователе.
     """
     return await _build_employee_detail_by_id(current_user.id, session)
 
@@ -149,20 +198,50 @@ async def list_employees(
             "если пусто — возвращается список сотрудников."
         ),
     ),
+    skills: list[str] | None = Query(
+        default=None,
+        description=(
+            "Фильтр по навыкам, формат элемента: 'skill_name:level'. "
+            "Можно передать до 3 значений. Совпадение по точному уровню."
+        ),
+    ),
+    titles: list[str] | None = Query(
+        default=None,
+        description="Фильтр по должностям: список полных названий должности.",
+    ),
+    legal_entity_ids: list[int] | None = Query(
+        default=None,
+        description=(
+            "Фильтр по юр. лицам (unit_type='legal_entity'): "
+            "список org_unit_id, под которыми должен лежать сотрудник."
+        ),
+    ),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[EmployeeDetail]:
-    """Возвращает список сотрудников с опциональным поиском.
+    """Возвращает список сотрудников с поиском и фильтрами.
 
     Args:
-        q: Поисковая строка. Если пусто, возвращается список без фильтра.
+        q: Поисковая строка для полнотекстового поиска.
+        skills: Фильтр по навыкам в формате 'skill_name:level'.
+        titles: Фильтр по полным названиям должностей.
+        legal_entity_ids: Список идентификаторов юрлиц для фильтрации.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        Список детальных карточек сотрудников.
+        Список детализированных карточек сотрудников.
     """
     validate_utf8_or_raise(q)
 
-    rows = await search_employees(session=session, q=q, org_unit_id=None)
+    skill_filters = _parse_skill_filters(skills)
+
+    rows = await search_employees(
+        session=session,
+        q=q,
+        org_unit_id=None,
+        skill_filters=skill_filters,
+        titles=titles or None,
+        legal_entity_ids=legal_entity_ids or None,
+    )
     ids = [e.id for e in rows]
     items = await asyncio.gather(
         *(_build_employee_detail_by_id(eid, session) for eid in ids),
@@ -170,19 +249,117 @@ async def list_employees(
     return list(items)
 
 
+@router.get("/skills/search", response_model=list[SkillOption])
+async def search_skills_endpoint(
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Поиск по названию навыка (префикс). "
+            "Если не задан — возвращаются все уникальные навыки "
+            "(в разумных пределах)."
+        ),
+    ),
+    limit: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description="Максимальное количество навыков в ответе.",
+    ),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[SkillOption]:
+    """Поиск по доступным навыкам (для автодополнения в фильтре).
+
+    Args:
+        q: Поисковая строка для поиска по названию навыка (префикс).
+        limit: Максимальное количество элементов в ответе.
+        session: Асинхронная сессия базы данных.
+
+    Returns:
+        Список доступных вариантов навыков.
+    """
+    validate_utf8_or_raise(q)
+
+    try:
+        names = await search_skill_names(
+            session=session,
+            q=q,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.single(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Неожиданная ошибка: {exc}",
+                status=500,
+            ).model_dump(),
+        ) from exc
+
+    return [SkillOption(name=name) for name in names]
+
+
+@router.get("/titles/search", response_model=list[TitleItem])
+async def search_titles_endpoint(
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Поиск по названию должности (префикс). "
+            "Если не задан — возвращаются все уникальные должности "
+            "(в разумных пределах)."
+        ),
+    ),
+    limit: int = Query(
+        30,
+        ge=1,
+        le=200,
+        description="Максимальное количество должностей в ответе.",
+    ),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[TitleItem]:
+    """Поиск по должностям (для автодополнения в фильтре).
+
+    Args:
+        q: Поисковая строка для поиска по названию должности (префикс).
+        limit: Максимальное количество элементов в ответе.
+        session: Асинхронная сессия базы данных.
+
+    Returns:
+        Список доступных вариантов должностей.
+    """
+    validate_utf8_or_raise(q)
+
+    try:
+        names = await search_titles(
+            session=session,
+            q=q,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.single(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Неожиданная ошибка: {exc}",
+                status=500,
+            ).model_dump(),
+        ) from exc
+
+    return [TitleItem(title=name) for name in names]
+
+
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 async def get_employee(
     employee_id: int,
     session: AsyncSession = Depends(get_async_session),
 ) -> EmployeeDetail:
-    """Возвращает детальную карточку сотрудника по id.
+    """Возвращает детальную карточку сотрудника по идентификатору.
 
     Args:
         employee_id: Идентификатор сотрудника.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        Полная карточка сотрудника.
+        Детализированная информация о сотруднике.
     """
     return await _build_employee_detail_by_id(employee_id, session)
 
@@ -196,12 +373,12 @@ async def update_me(
     """Обновляет данные текущего пользователя.
 
     Args:
-        payload: Поля для обновления.
+        payload: Данные для частичного обновления профиля.
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь.
+        current_user: Текущий аутентифицированный пользователь.
 
     Returns:
-        Обновлённая карточка текущего пользователя.
+        Обновлённая детальная карточка пользователя.
     """
     changed = await apply_self_update(
         session,
@@ -225,15 +402,16 @@ async def admin_update_employee(
 
     Args:
         employee_id: Идентификатор сотрудника.
-        payload: Поля для обновления.
+        payload: Данные для частичного обновления профиля.
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь, выполняющий запрос.
+        current_user: Текущий аутентифицированный пользователь.
 
     Returns:
-        Обновлённая карточка сотрудника.
+        Обновлённая детальная карточка сотрудника.
 
     Raises:
-        HTTPException: Если нет прав администратора или сотрудник не найден.
+        HTTPException: Если у текущего пользователя нет прав администратора
+            или сотрудник не найден.
     """
     if not current_user.is_admin:
         raise HTTPException(

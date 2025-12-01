@@ -1,3 +1,5 @@
+"""Сервисы для работы с оргструктурой и поиском по орг-юнитам."""
+
 from __future__ import annotations
 
 from sqlalchemy import func, literal, select
@@ -123,20 +125,28 @@ def _build_path(by_id: dict[int, dict], org_unit_id: int) -> list[OrgPathItem]:
 
 def _matches_filters(
     path: list[OrgPathItem],
-    domain_id: int | None,
-    legal_entity_id: int | None,
+    *,
+    domain_ids: list[int] | None,
+    legal_entity_ids: list[int] | None,
 ) -> bool:
-    """Проверяет, удовлетворяет ли путь фильтрам по домену и юрлицу."""
-    if domain_id is not None:
+    """Проверяет, удовлетворяет ли путь фильтрам по доменам и юрлицам.
+
+    - domain_ids: в path должен быть узел с unit_type='domain' и id ∈ domain_ids
+    - legal_entity_ids: в path должен быть узел с unit_type='legal_entity'
+      и id ∈ legal_entity_ids
+
+    Группы фильтров комбинируются по AND.
+    """
+    if domain_ids:
         if not any(
-            item.id == domain_id and item.unit_type == "domain"
+            item.unit_type == "domain" and item.id in domain_ids
             for item in path
         ):
             return False
 
-    if legal_entity_id is not None:
+    if legal_entity_ids:
         if not any(
-            item.id == legal_entity_id and item.unit_type == "legal_entity"
+            item.unit_type == "legal_entity" and item.id in legal_entity_ids
             for item in path
         ):
             return False
@@ -181,10 +191,20 @@ async def search_org_units(
     session: AsyncSession,
     *,
     q: str | None = None,
-    domain_id: int | None = None,
-    legal_entity_id: int | None = None,
+    domain_ids: list[int] | None = None,
+    legal_entity_ids: list[int] | None = None,
 ) -> list[OrgUnitSearchItem]:
-    """Ищет орг-юниты с опциональными фильтрами по домену и юрлицу."""
+    """Ищет орг-юниты с опциональными фильтрами по доменам и юрлицам.
+
+    Параметры:
+        q: поисковая строка по названию орг-юнита.
+        domain_ids: список id org_unit с unit_type='domain'; узел должен
+            находиться под одним из этих доменов.
+        legal_entity_ids: список id org_unit с unit_type='legal_entity';
+            узел должен находиться под одним из этих юрлиц.
+
+    Сам домен / юр. лицо в выдачу не попадает, только их потомки.
+    """
     by_id, children_of = await _load_org_units_index(session)
     candidate_ids = await _select_candidate_ids(session, q)
 
@@ -197,12 +217,24 @@ async def search_org_units(
         if node.get("is_archived"):
             continue
 
+        node_id = node["id"]
+        node_type = node["unit_type"]
+
+        if domain_ids and node_type == "domain" and node_id in domain_ids:
+            continue
+        if (
+            legal_entity_ids
+            and node_type == "legal_entity"
+            and node_id in legal_entity_ids
+        ):
+            continue
+
         path = _build_path(by_id, oid)
 
         if not _matches_filters(
             path,
-            domain_id=domain_id,
-            legal_entity_id=legal_entity_id,
+            domain_ids=domain_ids,
+            legal_entity_ids=legal_entity_ids,
         ):
             continue
 
@@ -215,7 +247,7 @@ async def search_org_units(
 
         items.append(
             OrgUnitSearchItem(
-                id=node["id"],
+                id=node_id,
                 name=node["name"],
                 has_children=has_children,
                 path=path,
@@ -223,3 +255,51 @@ async def search_org_units(
         )
 
     return items
+
+
+async def list_domains(session: AsyncSession) -> list[OrgUnit]:
+    """Возвращает все активные домены (unit_type='domain')."""
+    stmt = (
+        select(OrgUnit)
+        .where(
+            OrgUnit.unit_type == "domain",
+            OrgUnit.is_archived.is_(False),
+        )
+        .order_by(OrgUnit.name.asc(), OrgUnit.id.asc())
+    )
+
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def search_legal_entities(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    domain_id: int | None = None,
+    limit: int | None = None,
+) -> list[OrgUnit]:
+    """Поиск по юр. лицам (unit_type='legal_entity').
+
+    Если задан domain_id, возвращаем только юр. лица под этим доменом.
+    Поиск по q реализован через ILIKE '%q%'.
+    """
+    stmt = select(OrgUnit).where(
+        OrgUnit.unit_type == "legal_entity",
+        OrgUnit.is_archived.is_(False),
+    )
+
+    if domain_id is not None:
+        stmt = stmt.where(OrgUnit.parent_id == domain_id)
+
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(OrgUnit.name.ilike(pattern))
+
+    stmt = stmt.order_by(OrgUnit.name.asc(), OrgUnit.id.asc())
+
+    if limit is not None:
+        stmt = stmt.limit(limit)
+
+    res = await session.execute(stmt)
+    return list(res.scalars().all())

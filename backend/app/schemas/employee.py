@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.media import MediaInfo
 
@@ -52,7 +51,7 @@ class EmployeeDetail(BaseModel):
     birth_date: date | None = None
     hire_date: date | None = None
     bio: str | None = None
-    skill_ratings: dict[str, Any] | None = None
+    skill_ratings: dict[str, int] | None = None
 
     is_admin: bool = False
     is_blocked: bool = False
@@ -70,7 +69,7 @@ class EmployeeSelfUpdate(BaseModel):
 
     middle_name: str | None = None
     bio: str | None = None
-    skill_ratings: dict[str, Any] | None = None
+    skill_ratings: dict[str, int] | None = None
 
     work_phone: str | None = None
     mattermost_handle: str | None = None
@@ -86,6 +85,28 @@ class EmployeeSelfUpdate(BaseModel):
 
     hire_date: date | None = None
 
+    @field_validator("skill_ratings")
+    @classmethod
+    def validate_skill_ratings_user(
+        cls,
+        v: dict[str, int] | None,
+    ) -> dict[str, int] | None:
+        """Проверяет, что уровни навыков от 1 до 5."""
+        if v is None:
+            return None
+
+        for name, level in v.items():
+            if level is None:
+                raise ValueError(
+                    f"Уровень навыка '{name}' должен быть указан (1–5).",
+                )
+            if not 1 <= int(level) <= 5:
+                raise ValueError(
+                    f"Уровень навыка '{name}' должен быть в диапазоне 1–5.",
+                )
+
+        return v
+
 
 class EmployeeAdminUpdate(BaseModel):
     """Поля профиля, которые может менять администратор."""
@@ -94,7 +115,7 @@ class EmployeeAdminUpdate(BaseModel):
 
     middle_name: str | None = None
     bio: str | None = None
-    skill_ratings: dict[str, Any] | None = None
+    skill_ratings: dict[str, int] | None = None
 
     work_phone: str | None = None
     mattermost_handle: str | None = None
@@ -110,3 +131,41 @@ class EmployeeAdminUpdate(BaseModel):
 
     is_admin: bool | None = None
     is_blocked: bool | None = None
+
+    @field_validator("skill_ratings")
+    @classmethod
+    def validate_skill_ratings_admin(
+        cls,
+        v: dict[str, int] | None,
+    ) -> dict[str, int] | None:
+        """Проверяет, что уровни навыков от 1 до 5."""
+        if v is None:
+            return None
+
+        for name, level in v.items():
+            if level is None:
+                raise ValueError(
+                    f"Уровень навыка '{name}' должен быть указан (1–5).",
+                )
+            if not 1 <= int(level) <= 5:
+                raise ValueError(
+                    f"Уровень навыка '{name}' должен быть в диапазоне 1–5.",
+                )
+
+        return v
+
+
+class SkillOption(BaseModel):
+    """Вариант навыка для автодополнения в фильтре."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Название навыка (ключ из skill_ratings)")
+
+
+class TitleItem(BaseModel):
+    """Вариант названия должности для автодополнения в фильтре."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(description="Название должности")
