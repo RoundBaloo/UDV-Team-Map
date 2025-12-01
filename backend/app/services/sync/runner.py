@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.employee import Employee
-from app.models.sync import ExternalEntitySnapshot, SyncJob, SyncRecord
-from app.schemas.sync import RawEmployeeAD
-from app.services.sync.normalizer import NormalizedEmployee, normalize_employee
-from app.services.sync.preprocessor import preprocess_ad_payload
+from app.models.sync import SyncJob, SyncRecord
+from app.schemas.sync import SyncEmployeePayload
+from app.services.sync.preprocessor import load_sync_payload
 from app.services.sync.repository import (
     get_employee_by_email,
     get_employee_by_external_ref,
-    get_org_unit_by_name_and_type,
+    resolve_department_id_for_sync,
     upsert_employee_core,
 )
 
@@ -23,24 +20,8 @@ class SyncSummary(dict):
     """Счётчик агрегированных метрик синхронизации."""
 
     def inc(self, key: str, delta: int = 1) -> None:
+        """Увеличивает указанную метрику на delta."""
         self[key] = int(self.get(key, 0)) + delta
-
-
-class OrphanedPendingError(Exception):
-    """Есть нерешенные orphaned-сотрудники, синхронизацию запускать нельзя."""
-
-
-async def _has_unresolved_orphaned(session: AsyncSession) -> bool:
-    """Проверяет наличие строк orphaned без decision в sync_record."""
-    res = await session.execute(
-        select(SyncRecord.id)
-        .where(
-            SyncRecord.status == "orphaned",
-            SyncRecord.decision.is_(None),
-        )
-        .limit(1),
-    )
-    return res.scalar_one_or_none() is not None
 
 
 async def _detect_intended_action(
@@ -49,7 +30,7 @@ async def _detect_intended_action(
     external_ref: str | None,
     email: str,
 ) -> str:
-    """Определяет предполагаемое действие для записи: create или update."""
+    """Определяет предполагаемое действие: create или update."""
     existing: Employee | None = None
     if external_ref:
         existing = await get_employee_by_external_ref(session, external_ref)
@@ -58,22 +39,33 @@ async def _detect_intended_action(
     return "update" if existing else "create"
 
 
+def _calc_is_blocked_from_sync(payload: SyncEmployeePayload) -> bool | None:
+    """Определяет блокировку сотрудника по данным синхронизации."""
+    if payload.is_in_blocked_ou is True:
+        return True
+    if payload.is_blocked_from_ad is True:
+        return True
+    return None
+
+
+def _calc_status_from_sync(payload: SyncEmployeePayload) -> str | None:
+    """Определяет статус сотрудника по данным синхронизации."""
+    if payload.is_in_blocked_ou is True:
+        return "dismissed"
+    return None
+
+
 async def run_employee_sync(
     session: AsyncSession,
     *,
-    payload: Any,
     trigger: str = "manual",
 ) -> dict[str, int]:
     """Запускает полную синхронизацию сотрудников из AD.
 
-    Перед запуском проверяет наличие нерешенных orphaned-записей и
-    при их наличии выбрасывает OrphanedPendingError.
+    Источник данных определяется в load_sync_payload(), который:
+    * в dev-режиме читает тестовый JSON-файл;
+    * в бою обращается к интеграции с AD.
     """
-    if await _has_unresolved_orphaned(session):
-        raise OrphanedPendingError(
-            "Cannot start sync while there are orphaned employees without decision.",
-        )
-
     job = SyncJob(
         trigger=trigger,
         status="running",
@@ -83,131 +75,146 @@ async def run_employee_sync(
     session.add(job)
     await session.flush()
 
-    summary = SyncSummary(created=0, updated=0, orphaned=0, errors=0)
+    summary = SyncSummary(created=0, updated=0, archived=0, errors=0)
 
     try:
-        raw_list: list[RawEmployeeAD] = preprocess_ad_payload(payload)
-        norm_list: list[NormalizedEmployee] = [
-            normalize_employee(r) for r in raw_list
-        ]
-
-        for n in norm_list:
-            snapshot = ExternalEntitySnapshot(
-                external_ref=n.external_ref or n.email,
-                job_id=job.id,
-                payload=n.__dict__,
-                normalized=n.__dict__,
-                received_at=datetime.now(timezone.utc),
-            )
-            session.add(snapshot)
-        await session.flush()
-
+        raw_items: list[SyncEmployeePayload] = await load_sync_payload()
         by_external: dict[str, int] = {}
 
-        for n in norm_list:
-            ou_id: int | None = None
-            if n.department:
-                dep = await get_org_unit_by_name_and_type(
-                    session,
-                    name=n.department,
-                    unit_type="department",
-                )
-                if dep:
-                    ou_id = dep.id
-            if ou_id is None and n.company:
-                le = await get_org_unit_by_name_and_type(
-                    session,
-                    name=n.company,
-                    unit_type="legal_entity",
-                )
-                if le:
-                    ou_id = le.id
-
+        for item in raw_items:
             intended_action = await _detect_intended_action(
                 session,
-                external_ref=n.external_ref,
-                email=n.email,
+                external_ref=item.external_ref,
+                email=item.email,
             )
+
+            # company / department обязательны
+            if not item.company or not item.department:
+                summary.inc("errors")
+                session.add(
+                    SyncRecord(
+                        job_id=job.id,
+                        external_ref=item.external_ref or item.email,
+                        action=intended_action,
+                        status="error",
+                        error_code="ORG_UNIT_MISSING",
+                        message="Missing company or department in sync payload",
+                    ),
+                )
+                continue
+
+            department_id: int | None = await resolve_department_id_for_sync(
+                session,
+                company=item.company,
+                department=item.department,
+            )
+
+            if department_id is None:
+                summary.inc("errors")
+                session.add(
+                    SyncRecord(
+                        job_id=job.id,
+                        external_ref=item.external_ref or item.email,
+                        action=intended_action,
+                        status="error",
+                        error_code="ORG_UNIT_NOT_FOUND",
+                        message=(
+                            "Org unit not found for "
+                            f"company='{item.company}', "
+                            f"department='{item.department}'"
+                        ),
+                    ),
+                )
+                continue
+
+            is_blocked_from_sync = _calc_is_blocked_from_sync(item)
+            status_from_sync = _calc_status_from_sync(item)
 
             async with session.begin_nested():
                 try:
-                    emp, created, changed = await upsert_employee_core(
+                    (
+                        emp,
+                        created,
+                        changed,
+                        dismissed_now,
+                    ) = await upsert_employee_core(
                         session,
-                        external_ref=n.external_ref,
-                        email=n.email,
-                        first_name=n.first_name,
-                        middle_name=n.middle_name,
-                        last_name=n.last_name,
-                        title=n.title,
-                        bio=None,
-                        skill_ratings=None,
-                        lowest_org_unit_id=ou_id,
-                        password_hash=n.password_hash,
+                        external_ref=item.external_ref,
+                        email=item.email,
+                        first_name=item.first_name,
+                        middle_name=item.middle_name,
+                        last_name=item.last_name,
+                        title=item.title,
+                        department_id=department_id,
+                        password_hash=item.password_hash,
+                        is_blocked_from_sync=is_blocked_from_sync,
+                        status_from_sync=status_from_sync,
                     )
 
+                    action: str | None = None
                     if created:
+                        action = "create"
                         summary.inc("created")
-                        session.add(
-                            SyncRecord(
-                                job_id=job.id,
-                                external_ref=n.external_ref or n.email,
-                                action="create",
-                                status="applied",
-                                decision=None,
-                                decided_by_employee_id=None,
-                                decided_at=None,
-                                message=None,
-                            ),
-                        )
+                    elif dismissed_now:
+                        action = "archive"
+                        summary.inc("archived")
                     elif changed:
+                        action = "update"
                         summary.inc("updated")
+
+                    if action is not None:
                         session.add(
                             SyncRecord(
                                 job_id=job.id,
-                                external_ref=n.external_ref or n.email,
-                                action="update",
+                                external_ref=item.external_ref or item.email,
+                                action=action,
                                 status="applied",
-                                decision=None,
-                                decided_by_employee_id=None,
-                                decided_at=None,
+                                error_code=None,
                                 message=None,
                             ),
                         )
 
-                    if n.external_ref:
-                        by_external[n.external_ref] = emp.id
+                    if item.external_ref:
+                        by_external[item.external_ref] = emp.id
 
                 except Exception as exc:
                     summary.inc("errors")
+
+                    error_action = (
+                        "archive" if item.is_in_blocked_ou is True else intended_action
+                    )
+
                     session.add(
                         SyncRecord(
                             job_id=job.id,
-                            external_ref=n.external_ref or n.email,
-                            action=intended_action,
+                            external_ref=item.external_ref or item.email,
+                            action=error_action,
                             status="error",
-                            decision=None,
-                            decided_by_employee_id=None,
-                            decided_at=None,
+                            error_code="APPLY_ERROR",
                             message=str(exc),
                         ),
                     )
 
         await session.flush()
 
-        for n in norm_list:
-            mgr_ext = (n.manager_external_ref or "").strip()
+        # Вторая фаза — проставляем менеджеров по manager_external_ref
+        for item in raw_items:
+            mgr_ext = (item.manager_external_ref or "").strip()
             if not mgr_ext:
                 continue
 
-            subordinate: Employee | None = None
-            sub_id = by_external.get(n.external_ref) if n.external_ref else None
-            if sub_id:
-                subordinate = await session.get(Employee, sub_id)
-            elif n.external_ref:
+            subordinate_id = (
+                by_external.get(item.external_ref) if item.external_ref else None
+            )
+            if subordinate_id:
+                subordinate = await session.get(Employee, subordinate_id)
+            elif item.external_ref:
                 subordinate = await get_employee_by_external_ref(
                     session,
-                    n.external_ref,
+                    item.external_ref,
                 )
+            else:
+                subordinate = None
 
             if not subordinate:
                 continue
@@ -218,43 +225,28 @@ async def run_employee_sync(
 
             if subordinate.manager_id != manager.id:
                 subordinate.manager_id = manager.id
-                summary.inc("managers_linked")
 
-        incoming_keys = {
-            x.external_ref or x.email
-            for x in norm_list
-            if (x.external_ref or x.email)
-        }
-        res = await session.execute(
-            select(Employee).where(Employee.status == "active"),
+        errors = summary.get("errors", 0)
+        successes = (
+            summary.get("created", 0)
+            + summary.get("updated", 0)
+            + summary.get("archived", 0)
         )
-        local_active: list[Employee] = list(res.scalars())
 
-        for emp in local_active:
-            key = emp.external_ref or emp.email
-            if key and key not in incoming_keys:
-                summary.inc("orphaned")
-                session.add(
-                    SyncRecord(
-                        job_id=job.id,
-                        external_ref=key,
-                        action="archive",
-                        status="orphaned",
-                        decision=None,
-                        decided_by_employee_id=None,
-                        decided_at=None,
-                        message="Missing in source payload",
-                    ),
-                )
+        if errors > 0 and successes > 0:
+            job.status = "partial"
+        elif errors > 0 and successes == 0:
+            job.status = "error"
+        else:
+            job.status = "success"
 
-        job.status = "success"
         job.finished_at = datetime.now(timezone.utc)
         job.summary = dict(summary)
 
         await session.commit()
         return dict(summary)
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         await session.rollback()
         job.status = "error"
         job.finished_at = datetime.now(timezone.utc)

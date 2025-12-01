@@ -11,7 +11,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     Text,
     func,
     text,
@@ -29,35 +28,35 @@ class Employee(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    # Внешний идентификатор из AD (для отслеживания изменений)
     external_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Email, регистронезависимый (CITEXT)
     email: Mapped[str] = mapped_column(CITEXT, nullable=False, unique=True)
 
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     middle_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Должность
     title: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Статус: active / dismissed
     status: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         server_default="active",
     )
 
-    # Менеджер (руководитель сотрудника)
     manager_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("employee.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    # Мельчайший орг-юнит, к которому относится сотрудник
-    lowest_org_unit_id: Mapped[int | None] = mapped_column(
+    department_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("org_unit.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    direction_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("org_unit.id", ondelete="SET NULL"),
         nullable=True,
@@ -65,7 +64,6 @@ class Employee(Base):
 
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # JSONB { "python": 4, "fastapi": 3, ... }
     skill_ratings: Mapped[dict[str, int] | None] = mapped_column(
         JSONB,
         nullable=True,
@@ -88,14 +86,6 @@ class Employee(Base):
         nullable=True,
     )
 
-    # Ссылка на последний снапшот из AD
-    last_applied_snapshot_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("external_entity_snapshot.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-
-    # Авторизация / блокировки
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_blocked: Mapped[bool] = mapped_column(
         Boolean,
@@ -112,7 +102,6 @@ class Employee(Base):
         server_default="false",
     )
 
-    # STORED FTS
     search_tsv: Mapped[str] = mapped_column(
         TSVECTOR,
         Computed(
@@ -141,12 +130,16 @@ class Employee(Base):
         server_default=func.now(),
     )
 
-    # --- relationships ---
-
-    lowest_org_unit: Mapped["OrgUnit"] = relationship(
+    department: Mapped["OrgUnit"] = relationship(
         "OrgUnit",
-        foreign_keys="Employee.lowest_org_unit_id",
-        back_populates="employees",
+        foreign_keys="Employee.department_id",
+        back_populates="employees_department",
+    )
+
+    direction: Mapped["OrgUnit"] = relationship(
+        "OrgUnit",
+        foreign_keys="Employee.direction_id",
+        back_populates="employees_direction",
     )
 
     manager: Mapped["Employee"] = relationship(
@@ -201,7 +194,8 @@ class Employee(Base):
             postgresql_ops={func.lower(title).key: "gin_trgm_ops"},
         ),
         Index("idx_employee_manager_id", "manager_id"),
-        Index("idx_employee_lowest_org_unit_id", "lowest_org_unit_id"),
+        Index("idx_employee_department_id", "department_id"),
+        Index("idx_employee_direction_id", "direction_id"),
         Index("idx_employee_status", "status"),
         Index(
             "idx_employee_search_tsv",

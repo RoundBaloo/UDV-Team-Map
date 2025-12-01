@@ -22,7 +22,7 @@ from app.schemas.media import MediaInfo
 from app.services.employee_service import (
     apply_admin_update,
     apply_self_update,
-    search_employees,  # единый поиск (FTS + опечатки)
+    search_employees,
 )
 from app.services.media_service import resolve_media_public_url
 from app.utils.encoding import validate_utf8_or_raise
@@ -38,14 +38,14 @@ async def _build_employee_detail_by_id(
     employee_id: int,
     session: AsyncSession,
 ) -> EmployeeDetail:
-    """Формирует детализированную карточку сотрудника по его идентификатору.
+    """Формирует детализированную карточку сотрудника по id.
 
     Args:
         employee_id: Идентификатор сотрудника.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        EmployeeDetail: Полная карточка сотрудника.
+        Полная карточка сотрудника.
 
     Raises:
         HTTPException: Если сотрудник не найден.
@@ -56,7 +56,8 @@ async def _build_employee_detail_by_id(
             .where(Employee.id == employee_id)
             .options(
                 selectinload(Employee.manager),
-                selectinload(Employee.lowest_org_unit),
+                selectinload(Employee.department),
+                selectinload(Employee.direction),
             ),
         )
     ).scalar_one_or_none()
@@ -81,11 +82,12 @@ async def _build_employee_detail_by_id(
         )
 
     org_unit_obj: OrgUnitInfo | None = None
-    if db_emp.lowest_org_unit:
+    lowest_unit = db_emp.direction or db_emp.department
+    if lowest_unit:
         org_unit_obj = OrgUnitInfo(
-            id=db_emp.lowest_org_unit.id,
-            name=db_emp.lowest_org_unit.name,
-            unit_type=db_emp.lowest_org_unit.unit_type,
+            id=lowest_unit.id,
+            name=lowest_unit.name,
+            unit_type=lowest_unit.unit_type,
         )
 
     photo_obj: MediaInfo | None = None
@@ -130,24 +132,21 @@ async def get_me(
 
     Args:
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь из контекста авторизации.
+        current_user: Текущий пользователь.
 
     Returns:
-        EmployeeDetail: Полная карточка текущего пользователя.
+        Полная карточка текущего пользователя.
     """
     return await _build_employee_detail_by_id(current_user.id, session)
 
 
-# ---------------------------------------------------------------------------
-# Список сотрудников (полные карточки) с опциональным поиском
-# ---------------------------------------------------------------------------
 @router.get("/", response_model=list[EmployeeDetail])
 async def list_employees(
     q: str | None = Query(
         None,
         description=(
             "Поисковая строка (UTF-8 percent-encoded); "
-            "если пусто - возвращается просто список сотрудников"
+            "если пусто — возвращается список сотрудников."
         ),
     ),
     session: AsyncSession = Depends(get_async_session),
@@ -155,11 +154,11 @@ async def list_employees(
     """Возвращает список сотрудников с опциональным поиском.
 
     Args:
-        q: Поисковая строка. Если пусто, возвращается список сотрудников без фильтра.
+        q: Поисковая строка. Если пусто, возвращается список без фильтра.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        list[EmployeeDetail]: Список детальных карточек сотрудников.
+        Список детальных карточек сотрудников.
     """
     validate_utf8_or_raise(q)
 
@@ -171,29 +170,23 @@ async def list_employees(
     return list(items)
 
 
-# ---------------------------------------------------------------------------
-# Подробная карточка сотрудника
-# ---------------------------------------------------------------------------
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 async def get_employee(
     employee_id: int,
     session: AsyncSession = Depends(get_async_session),
 ) -> EmployeeDetail:
-    """Возвращает детальную карточку сотрудника по его идентификатору.
+    """Возвращает детальную карточку сотрудника по id.
 
     Args:
         employee_id: Идентификатор сотрудника.
         session: Асинхронная сессия базы данных.
 
     Returns:
-        EmployeeDetail: Полная карточка сотрудника.
+        Полная карточка сотрудника.
     """
     return await _build_employee_detail_by_id(employee_id, session)
 
 
-# ---------------------------------------------------------------------------
-# PATCH /me - пользователь обновляет свои поля
-# ---------------------------------------------------------------------------
 @router.patch("/me", response_model=EmployeeDetail)
 async def update_me(
     payload: EmployeeSelfUpdate,
@@ -203,12 +196,12 @@ async def update_me(
     """Обновляет данные текущего пользователя.
 
     Args:
-        payload: Поля, которые пользователь хочет обновить.
+        payload: Поля для обновления.
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь из контекста авторизации.
+        current_user: Текущий пользователь.
 
     Returns:
-        EmployeeDetail: Обновленная детальная карточка текущего пользователя.
+        Обновлённая карточка текущего пользователя.
     """
     changed = await apply_self_update(
         session,
@@ -221,9 +214,6 @@ async def update_me(
     return await _build_employee_detail_by_id(current_user.id, session)
 
 
-# ---------------------------------------------------------------------------
-# PATCH /employees/{employee_id} - админ обновляет пользователя
-# ---------------------------------------------------------------------------
 @router.patch("/{employee_id}", response_model=EmployeeDetail)
 async def admin_update_employee(
     employee_id: int,
@@ -237,14 +227,13 @@ async def admin_update_employee(
         employee_id: Идентификатор сотрудника.
         payload: Поля для обновления.
         session: Асинхронная сессия базы данных.
-        current_user: Текущий пользователь, от имени которого выполняется запрос.
+        current_user: Текущий пользователь, выполняющий запрос.
 
     Returns:
-        EmployeeDetail: Обновленная детальная карточка сотрудника.
+        Обновлённая карточка сотрудника.
 
     Raises:
-        HTTPException: Если у пользователя нет прав администратора
-            или если сотрудник не найден.
+        HTTPException: Если нет прав администратора или сотрудник не найден.
     """
     if not current_user.is_admin:
         raise HTTPException(

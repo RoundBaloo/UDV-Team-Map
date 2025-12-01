@@ -1,31 +1,34 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
-class RawEmployeeAD(BaseModel):
-    """Сырой сотрудник из AD (без строгой валидации email-домена)."""
+class SyncEmployeePayload(BaseModel):
+    """Единый формат сотрудника для синхронизации AD → UDV Team Map."""
+
     external_ref: str | None = None
     email: str
+
     first_name: str
-    middle_name: str | None = None
     last_name: str
+    middle_name: str | None = None
     title: str | None = None
 
-    manager_external_ref: str | None = None
     company: str | None = None
     department: str | None = None
+    manager_external_ref: str | None = None
+
+    is_blocked_from_ad: bool | None = None
+    is_in_blocked_ou: bool | None = None
 
     password_hash: str | None = None
-
-    raw: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("email")
     @classmethod
     def _normalize_email(cls, v: str) -> str:
-        """Нормализация email без строгой проверки домена."""
+        """Нормализует email: trim + lower."""
         return v.strip().lower()
 
     @field_validator(
@@ -41,64 +44,61 @@ class RawEmployeeAD(BaseModel):
     )
     @classmethod
     def _strip_text(cls, v: str | None) -> str | None:
-        """Обрезаем пробелы и приводим пустые строки к None."""
+        """Обрезает пробелы и приводит пустые строки к None."""
         if v is None:
-            return v
+            return None
         s = v.strip()
-        return s if s else None
+        return s or None
 
 
-__all__ = ["RawEmployeeAD"]
+class SyncJobSummary(BaseModel):
+    """Агрегированная сводка по запуску синхронизации."""
+
+    created: int = 0
+    updated: int = 0
+    archived: int = 0
+    errors: int = 0
 
 
-class OrgUnitRef(BaseModel):
-    """Ссылка на узел оргструктуры по названию и типу.
+class SyncJobListItem(BaseModel):
+    """Элемент списка запусков синхронизации."""
 
-    Порядок элементов в списке: от верхнего уровня к нижнему,
-    например: компания -> департамент -> команда.
-    """
+    id: int = Field(serialization_alias="job_id")
+    trigger: str
+    status: str
 
-    name: str
-    unit_type: str
+    started_date: date
+    finished_date: date | None = None
 
-
-class NormalizedEmployee(BaseModel):
-    """Нормализованный сотрудник, готовый к применению в БД.
-
-    Apply-сервис может:
-    - выбрать самый глубокий существующий org_unit из org_path,
-    - найти manager_id по manager_external_ref,
-    - сделать upsert сотрудника.
-    """
-
-    external_ref: str | None = None
-    email: EmailStr
-
-    first_name: str
-    last_name: str
-    middle_name: str | None = None
-
-    title: str | None = None
-
-    org_path: list[OrgUnitRef] = Field(default_factory=list)
-
-    manager_external_ref: str | None = None
-    manager_full_name: str | None = None
-
-    received_at: datetime = Field(default_factory=datetime.utcnow)
+    summary: SyncJobSummary
 
 
-class SyncEmployeesIngestRequest(BaseModel):
-    """Пакет на вход API: пачка сырых сотрудников из AD."""
+class SyncRecordItem(BaseModel):
+    """Строка журнала синхронизации по одному сотруднику."""
 
-    items: list[RawEmployeeAD]
+    id: int
+    external_ref: str
+    action: str
+    status: str
+    error_code: str | None = None
+    message: str | None = None
 
 
-class SyncEmployeesIngestResponse(BaseModel):
-    """Ответ API после приёма: ID sync_job и количество записей."""
+class SyncJobDetail(BaseModel):
+    """Детальная информация по одному запуску синхронизации."""
+
+    id: int = Field(serialization_alias="job_id")
+    trigger: str
+    status: str
+    started_date: date
+    finished_date: date | None = None
+    summary: SyncJobSummary
+    records: list[SyncRecordItem]
+
+
+class SyncJobRunResponse(BaseModel):
+    """Ответ при ручном запуске синхронизации."""
 
     job_id: int
-    received: int
-
-
-RawEmployeeAD.model_rebuild()
+    status: str
+    summary: SyncJobSummary

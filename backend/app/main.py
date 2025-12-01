@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware 
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth as auth_api
 from app.api.employees_router import router as employees_router
 from app.api.media_router import router as media_router
 from app.api.org_router import router as org_router
 from app.api.photo_moderation_router import router as photo_moderation_router
+from app.api.sync_router import router as sync_router
 from app.core.errors import register_exception_handlers
 
 
@@ -20,7 +21,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         debug=True,
     )
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000"],
@@ -33,7 +34,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["Health"])
     async def health() -> dict[str, str]:
-        """Простой health-check эндпоинт."""
+        """Возвращает статус доступности сервиса."""
         return {"status": "ok"}
 
     app.include_router(auth_api.router, prefix="/api")
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(photo_moderation_router, prefix="/api")
     app.include_router(media_router, prefix="/api")
     app.include_router(org_router, prefix="/api")
+    app.include_router(sync_router, prefix="/api")
 
     return app
 

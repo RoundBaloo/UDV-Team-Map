@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.media import MediaInfo
 
@@ -18,12 +18,15 @@ class ManagerInfo(BaseModel):
 
 
 class OrgUnitInfo(BaseModel):
-    """Информация о наименьшем орг-юните сотрудника."""
+    """Информация о «нижнем» орг-юните сотрудника.
+
+    Сюда попадает либо направление (direction), либо департамент (department),
+    если направления нет.
+    """
 
     id: int = Field(serialization_alias="org_unit_id")
     name: str
-    # Тип орг-юнита (например, legal_entity / department)
-    unit_type: str | None = None
+    unit_type: str | None = None  # department / direction
 
 
 class EmployeeDetail(BaseModel):
@@ -61,7 +64,7 @@ class EmployeeDetail(BaseModel):
 
 
 class EmployeeSelfUpdate(BaseModel):
-    """Поля профиля, которые сотрудник может редактировать у себя сам."""
+    """Поля профиля, доступные для редактирования самим сотрудником."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -85,7 +88,7 @@ class EmployeeSelfUpdate(BaseModel):
 
 
 class EmployeeAdminUpdate(BaseModel):
-    """Поля, которые админ может менять у любого пользователя."""
+    """Поля профиля, которые может менять администратор."""
 
     model_config = ConfigDict(extra="forbid")
 

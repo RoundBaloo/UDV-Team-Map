@@ -18,7 +18,7 @@ from app.models.base import Base
 
 
 class OrgUnit(Base):
-    """Орг-юнит: блок / домен / юрлицо / департамент / направление."""
+    """Орг-юнит: группа / домен / юрлицо / департамент / направление."""
 
     __tablename__ = "org_unit"
 
@@ -32,6 +32,8 @@ class OrgUnit(Base):
 
     unit_type: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+
+    ad_name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_archived: Mapped[bool] = mapped_column(
         Boolean,
@@ -56,8 +58,6 @@ class OrgUnit(Base):
         server_default=func.now(),
     )
 
-    # --- relationships ---
-
     parent: Mapped["OrgUnit"] = relationship(
         "OrgUnit",
         remote_side="OrgUnit.id",
@@ -70,12 +70,16 @@ class OrgUnit(Base):
         passive_deletes=True,
     )
 
-    # Сотрудники, для которых этот OrgUnit - наименьший (lowest)
-    employees: Mapped[list["Employee"]] = relationship(
+    employees_department: Mapped[list["Employee"]] = relationship(
         "Employee",
-        back_populates="lowest_org_unit",
-        foreign_keys="Employee.lowest_org_unit_id",
-        passive_deletes=True,
+        foreign_keys="Employee.department_id",
+        back_populates="department",
+    )
+
+    employees_direction: Mapped[list["Employee"]] = relationship(
+        "Employee",
+        foreign_keys="Employee.direction_id",
+        back_populates="direction",
     )
 
     manager: Mapped["Employee"] = relationship(
@@ -89,6 +93,7 @@ class OrgUnit(Base):
             name="ck_org_unit_unit_type",
         ),
         Index("idx_org_unit_parent_id", "parent_id"),
+        Index("idx_org_unit_parent_id_ad_name", "parent_id", "ad_name"),
         Index("idx_org_unit_manager_id", "manager_id"),
         Index(
             "uq_org_unit_type_name_lower",

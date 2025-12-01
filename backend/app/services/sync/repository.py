@@ -4,12 +4,10 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.employee import Employee
 from app.models.org_unit import OrgUnit
-
-
-# === EMPLOYEE HELPERS ===
 
 
 async def get_employee_by_external_ref(
@@ -49,19 +47,18 @@ async def upsert_employee_core(
     last_name: str,
     middle_name: str | None,
     title: str | None,
-    bio: str | None,
-    skill_ratings: dict[str, Any] | None,
-    lowest_org_unit_id: int | None,
+    department_id: int | None,
     password_hash: str | None = None,
-) -> tuple[Employee, bool, bool]:
+    is_blocked_from_sync: bool | None = None,
+    status_from_sync: str | None = None,
+) -> tuple[Employee, bool, bool, bool]:
     """Создаёт или обновляет сотрудника.
 
-    Возвращает кортеж (employee, created, changed), где:
-    - created=True, если сотрудник был создан;
-    - changed=True, если при обновлении действительно изменились поля.
+    Возвращает кортеж (employee, created, changed, dismissed_now).
     """
     created = False
     changed = False
+    dismissed_now = False
 
     existing: Employee | None = None
     if external_ref:
@@ -70,7 +67,7 @@ async def upsert_employee_core(
         )
         existing = res.scalar_one_or_none()
 
-    if not existing:
+    if existing is None:
         res = await session.execute(
             select(Employee).where(Employee.email == email),
         )
@@ -90,17 +87,34 @@ async def upsert_employee_core(
         set_if("middle_name", middle_name)
         set_if("last_name", last_name)
         set_if("title", title or "")
-        set_if("bio", bio)
-        set_if("skill_ratings", skill_ratings)
-        set_if("lowest_org_unit_id", lowest_org_unit_id)
+
+        if department_id is not None and existing.department_id != department_id:
+            existing.department_id = department_id
+            if getattr(existing, "direction_id", None) is not None:
+                existing.direction_id = None
+            changed = True
 
         if password_hash and existing.password_hash != password_hash:
             existing.password_hash = password_hash
             changed = True
 
-        emp = existing
+        if is_blocked_from_sync:
+            if not existing.is_blocked:
+                existing.is_blocked = True
+                changed = True
 
+        if status_from_sync == "dismissed" and existing.status != "dismissed":
+            existing.status = "dismissed"
+            dismissed_now = True
+            changed = True
+
+        emp = existing
     else:
+        status_value = "active"
+        if status_from_sync == "dismissed":
+            status_value = "dismissed"
+            dismissed_now = True
+
         emp = Employee(
             external_ref=external_ref,
             email=email,
@@ -108,37 +122,43 @@ async def upsert_employee_core(
             middle_name=middle_name,
             last_name=last_name,
             title=title or "",
-            bio=bio,
-            skill_ratings=skill_ratings,
-            lowest_org_unit_id=lowest_org_unit_id,
-            status="active",
+            department_id=department_id,
+            status=status_value,
             password_hash=password_hash,
+            is_blocked=bool(is_blocked_from_sync),
         )
         session.add(emp)
         created = True
         changed = True
 
-    return emp, created, changed
+    return emp, created, changed, dismissed_now
 
 
-# === ORG_UNIT HELPERS ===
-
-
-async def get_org_unit_by_name_and_type(
+async def resolve_department_id_for_sync(
     session: AsyncSession,
     *,
-    name: str | None,
-    unit_type: str | None,
-) -> OrgUnit | None:
-    """Возвращает неархивный орг-юнит по имени и типу или None, если не найден."""
-    if not name or not unit_type:
+    company: str | None,
+    department: str | None,
+) -> int | None:
+    """Ищет департамент по (company, department) через OrgUnit.ad_name."""
+    if not company or not department:
         return None
 
+    Parent = aliased(OrgUnit)
+    Child = aliased(OrgUnit)
+
     res = await session.execute(
-        select(OrgUnit).where(
-            OrgUnit.name == name,
-            OrgUnit.unit_type == unit_type,
-            OrgUnit.is_archived.is_(False),
-        ),
+        select(Child.id)
+        .join(Parent, Child.parent_id == Parent.id)
+        .where(
+            Parent.unit_type == "legal_entity",
+            Parent.ad_name == company,
+            Parent.is_archived.is_(False),
+            Child.unit_type == "department",
+            Child.ad_name == department,
+            Child.is_archived.is_(False),
+        )
+        .limit(1),
     )
+
     return res.scalar_one_or_none()

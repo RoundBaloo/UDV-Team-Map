@@ -5,21 +5,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Настройки приложения.
+    """Настройки приложения."""
 
-    Значения читаются из файла окружения `.env`.
-    """
-
-    # === Общие настройки приложения ===
     app_name: str = "udv-team-map"
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
 
-    # === Подключение к БД ===
     DATABASE_URL: str = Field(..., env="DATABASE_URL")
 
-    # === JWT / безопасность ===
     secret_key: str = Field(..., env="SECRET_KEY")
     access_token_expire_minutes: int = Field(
         60,
@@ -27,7 +21,6 @@ class Settings(BaseSettings):
     )
     jwt_algorithm: str = Field("HS256", env="JWT_ALGORITHM")
 
-    # === S3 / Object Storage ===
     s3_endpoint_url: str = Field(..., env="S3_ENDPOINT_URL")
     s3_region: str = Field("ru-central1", env="S3_REGION")
     s3_bucket: str = Field(..., env="S3_BUCKET")
@@ -36,6 +29,15 @@ class Settings(BaseSettings):
     s3_public_base: str | None = Field(
         default=None,
         env="S3_PUBLIC_BASE",
+    )
+
+    SYNC_USE_TEST_FILE: bool = Field(
+        True,
+        env="SYNC_USE_TEST_FILE",
+    )
+    SYNC_INGEST_FILE_PATH: str = Field(
+        "data_source/employees_for_sync.json",
+        env="SYNC_INGEST_FILE_PATH",
     )
 
     model_config: SettingsConfigDict = SettingsConfigDict(

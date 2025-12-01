@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
-from sqlalchemy import select, func, literal
+from sqlalchemy import func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.employee import Employee
 from app.models.org_unit import OrgUnit
 from app.schemas.org_structure import (
     OrgNode,
@@ -14,14 +10,12 @@ from app.schemas.org_structure import (
     OrgUnitSearchItem,
 )
 
-
 ORG_UNIT_SIM_THRESHOLD: float = 0.25
 ORG_UNIT_SEARCH_LIMIT: int = 7
 
 
 async def build_org_tree(session: AsyncSession) -> OrgNode:
     """Собирает дерево оргструктуры начиная с корня 'UDV Group' / 'group'."""
-
     rows = (
         await session.execute(
             select(
@@ -29,15 +23,15 @@ async def build_org_tree(session: AsyncSession) -> OrgNode:
                 OrgUnit.name,
                 OrgUnit.unit_type,
                 OrgUnit.parent_id,
-            ).where(OrgUnit.is_archived.is_(False))
+            ).where(OrgUnit.is_archived.is_(False)),
         )
     ).all()
 
     if not rows:
         raise ValueError("Org structure is empty (no active org units)")
 
-    by_id: Dict[int, Dict] = {}
-    children_of: Dict[Optional[int], List[int]] = {}
+    by_id: dict[int, dict] = {}
+    children_of: dict[int | None, list[int]] = {}
 
     for rid, name, unit_type, parent_id in rows:
         by_id[rid] = {
@@ -48,14 +42,16 @@ async def build_org_tree(session: AsyncSession) -> OrgNode:
         }
         children_of.setdefault(parent_id, []).append(rid)
 
-    root_id: Optional[int] = None
+    root_id: int | None = None
     for rid, node in by_id.items():
         if node["name"] == "UDV Group" and node["unit_type"] == "group":
             root_id = rid
             break
 
     if root_id is None:
-        raise ValueError("Root node 'UDV Group' with unit_type='group' not found")
+        raise ValueError(
+            "Root node 'UDV Group' with unit_type='group' not found",
+        )
 
     def attach_children(rid: int) -> OrgNode:
         node = by_id[rid]
@@ -75,9 +71,8 @@ async def build_org_tree(session: AsyncSession) -> OrgNode:
 
 async def _load_org_units_index(
     session: AsyncSession,
-) -> tuple[Dict[int, Dict], Dict[Optional[int], List[int]]]:
-    """Загружает все орг-юниты в словари by_id и children_of."""
-
+) -> tuple[dict[int, dict], dict[int | None, list[int]]]:
+    """Загружает все орг-юниты в индексы by_id и children_of."""
     rows = (
         await session.execute(
             select(
@@ -86,12 +81,12 @@ async def _load_org_units_index(
                 OrgUnit.unit_type,
                 OrgUnit.parent_id,
                 OrgUnit.is_archived,
-            )
+            ),
         )
     ).all()
 
-    by_id: Dict[int, Dict] = {}
-    children_of: Dict[Optional[int], List[int]] = {}
+    by_id: dict[int, dict] = {}
+    children_of: dict[int | None, list[int]] = {}
 
     for rid, name, unit_type, parent_id, is_archived in rows:
         by_id[rid] = {
@@ -106,11 +101,10 @@ async def _load_org_units_index(
     return by_id, children_of
 
 
-def _build_path(by_id: Dict[int, Dict], org_unit_id: int) -> List[OrgPathItem]:
+def _build_path(by_id: dict[int, dict], org_unit_id: int) -> list[OrgPathItem]:
     """Собирает путь от корня до org_unit_id по parent_id."""
-
-    path: List[OrgPathItem] = []
-    current_id: Optional[int] = org_unit_id
+    path: list[OrgPathItem] = []
+    current_id: int | None = org_unit_id
 
     while current_id is not None and current_id in by_id:
         node = by_id[current_id]
@@ -119,7 +113,7 @@ def _build_path(by_id: Dict[int, Dict], org_unit_id: int) -> List[OrgPathItem]:
                 id=node["id"],
                 name=node["name"],
                 unit_type=node["unit_type"],
-            )
+            ),
         )
         current_id = node["parent_id"]
 
@@ -128,15 +122,15 @@ def _build_path(by_id: Dict[int, Dict], org_unit_id: int) -> List[OrgPathItem]:
 
 
 def _matches_filters(
-    path: List[OrgPathItem],
-    domain_id: Optional[int],
-    legal_entity_id: Optional[int],
+    path: list[OrgPathItem],
+    domain_id: int | None,
+    legal_entity_id: int | None,
 ) -> bool:
-    """Проверяет, удовлетворяет ли путь фильтрам по домену / юр. лицу."""
-
+    """Проверяет, удовлетворяет ли путь фильтрам по домену и юрлицу."""
     if domain_id is not None:
         if not any(
-            item.id == domain_id and item.unit_type == "domain" for item in path
+            item.id == domain_id and item.unit_type == "domain"
+            for item in path
         ):
             return False
 
@@ -152,15 +146,9 @@ def _matches_filters(
 
 async def _select_candidate_ids(
     session: AsyncSession,
-    q: Optional[str],
-) -> List[int]:
-    """Возвращает список id орг-юнитов-кандидатов для выдачи.
-
-    - если q не задан или пустой: все неархивные узлы, отсортированные по name и id;
-    - если q задан: trigram-поиск по имени с порогом ORG_UNIT_SIM_THRESHOLD,
-      сортировка по similarity убыванию, затем по name, затем по id, LIMIT 7.
-    """
-
+    q: str | None,
+) -> list[int]:
+    """Возвращает id орг-юнитов-кандидатов для поиска."""
     if not q or not q.strip():
         stmt = (
             select(OrgUnit.id)
@@ -192,32 +180,15 @@ async def _select_candidate_ids(
 async def search_org_units(
     session: AsyncSession,
     *,
-    q: Optional[str] = None,
-    domain_id: Optional[int] = None,
-    legal_entity_id: Optional[int] = None,
-) -> List[OrgUnitSearchItem]:
-    """Поиск по орг-юнитам с опциональными фильтрами по домену и юр. лицу.
-
-    Логика:
-    - если q не задан: возвращаем все неархивные орг-юниты, отсортированные по имени;
-    - если q задан:
-        - используем similarity(unaccent(lower(name)), unaccent(lower(q))) >= threshold;
-        - сортируем по similarity убыванию, затем по имени и id;
-        - ограничиваем выдачу ORG_UNIT_SEARCH_LIMIT элементами.
-
-    Для каждого результата собираем:
-    - has_children: есть ли активные дочерние узлы;
-    - path: путь от корня до этого орг-юнита (OrgPathItem[]).
-
-    Фильтры:
-    - domain_id: в path должен присутствовать узел с этим id и unit_type='domain';
-    - legal_entity_id: в path должен присутствовать узел с этим id и unit_type='legal_entity'.
-    """
-
+    q: str | None = None,
+    domain_id: int | None = None,
+    legal_entity_id: int | None = None,
+) -> list[OrgUnitSearchItem]:
+    """Ищет орг-юниты с опциональными фильтрами по домену и юрлицу."""
     by_id, children_of = await _load_org_units_index(session)
     candidate_ids = await _select_candidate_ids(session, q)
 
-    items: List[OrgUnitSearchItem] = []
+    items: list[OrgUnitSearchItem] = []
 
     for oid in candidate_ids:
         node = by_id.get(oid)
@@ -228,7 +199,11 @@ async def search_org_units(
 
         path = _build_path(by_id, oid)
 
-        if not _matches_filters(path, domain_id=domain_id, legal_entity_id=legal_entity_id):
+        if not _matches_filters(
+            path,
+            domain_id=domain_id,
+            legal_entity_id=legal_entity_id,
+        ):
             continue
 
         active_child_ids = [
@@ -244,7 +219,7 @@ async def search_org_units(
                 name=node["name"],
                 has_children=has_children,
                 path=path,
-            )
+            ),
         )
 
     return items

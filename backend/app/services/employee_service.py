@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,7 +21,8 @@ async def get_all_employees(session: AsyncSession) -> list[Employee]:
         .where(Employee.status == "active")
         .options(
             selectinload(Employee.manager),
-            selectinload(Employee.lowest_org_unit),
+            selectinload(Employee.department),
+            selectinload(Employee.direction),
         )
         .order_by(
             Employee.last_name.asc(),
@@ -47,7 +48,7 @@ async def get_employee_with_refs(
     session: AsyncSession,
     employee_id: int,
 ) -> Employee | None:
-    """Возвращает сотрудника по ID с менеджером и орг-юнитом."""
+    """Возвращает сотрудника по ID с менеджером и орг-юнитами."""
     res = await session.execute(
         select(Employee)
         .where(Employee.id == employee_id)
@@ -58,7 +59,12 @@ async def get_employee_with_refs(
                 Employee.last_name,
                 Employee.title,
             ),
-            selectinload(Employee.lowest_org_unit).load_only(
+            selectinload(Employee.department).load_only(
+                OrgUnit.id,
+                OrgUnit.name,
+                OrgUnit.unit_type,
+            ),
+            selectinload(Employee.direction).load_only(
                 OrgUnit.id,
                 OrgUnit.name,
                 OrgUnit.unit_type,
@@ -69,7 +75,7 @@ async def get_employee_with_refs(
 
 
 def _set_if_changed(obj: Employee, field: str, value: Any) -> bool:
-    """Устанавливает поле, если значение реально изменилось (учитывая пустые строки)."""
+    """Устанавливает поле, если значение действительно изменилось."""
     current = getattr(obj, field)
     norm_current = current if current not in ("",) else None
     norm_value = value if value not in ("",) else None
@@ -154,11 +160,24 @@ async def search_employees(
     q: str | None = None,
     org_unit_id: int | None = None,
 ) -> list[Employee]:
-    """Ищет сотрудников по ФИО/должности/био с учётом FTS и триграмм."""
+    """Ищет сотрудников по ФИО, должности и био с учётом FTS и триграмм.
+
+    org_unit_id трактуется как «нижний» орг-юнит:
+    - если direction_id не NULL — берётся направление;
+    - иначе используется department_id.
+    """
     base = select(Employee).where(Employee.status == "active")
 
     if org_unit_id is not None:
-        base = base.where(Employee.lowest_org_unit_id == org_unit_id)
+        base = base.where(
+            or_(
+                Employee.direction_id == org_unit_id,
+                and_(
+                    Employee.direction_id.is_(None),
+                    Employee.department_id == org_unit_id,
+                ),
+            ),
+        )
 
     if not q or not q.strip():
         base = base.order_by(

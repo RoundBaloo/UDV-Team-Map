@@ -34,10 +34,7 @@ async def get_org_structure(
         session: Асинхронная сессия базы данных.
 
     Returns:
-        OrgNode: Корневой узел дерева оргструктуры.
-
-    Raises:
-        HTTPException: Если дерево оргструктуры не может быть построено.
+        Корневой узел дерева оргструктуры.
     """
     try:
         return await build_org_tree(session)
@@ -58,7 +55,7 @@ async def search_org_units_endpoint(
         default=None,
         description=(
             "Поисковая строка по названию орг-юнита. "
-            "Если не задана - возвращаем все подходящие узлы."
+            "Если не задана — возвращаем все подходящие узлы."
         ),
     ),
     domain_id: int | None = Query(
@@ -77,19 +74,16 @@ async def search_org_units_endpoint(
     ),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[OrgUnitSearchItem]:
-    """Поиск по орг-юнитам с поддержкой фильтров по домену и юр. лицу.
+    """Ищет орг-юниты с фильтрами по домену и юрлицу.
 
-    Логика:
+    Args:
+        q: Поисковая строка по названию орг-юнита.
+        domain_id: Фильтр по домену.
+        legal_entity_id: Фильтр по юрлицу.
+        session: Асинхронная сессия базы данных.
 
-    * Если q задан:
-        - используем поиск по похожести имени (unaccent + lower + trigram),
-          возвращаем релевантные юниты, отсортированные по similarity и имени.
-    * Если q не задан:
-        - возвращаем все подходящие орг-юниты (без LIMIT, как ты хотел).
-
-    Фильтры domain_id и legal_entity_id работают по path:
-    если в цепочке от корня до узла есть домен / юр. лицо с указанным id,
-    узел попадает в выборку.
+    Returns:
+        Список найденных орг-юнитов.
     """
     validate_utf8_or_raise(q)
 
@@ -120,8 +114,8 @@ async def list_unit_employees(
     q: str | None = Query(
         None,
         description=(
-            "Поисковая строка; если пусто - возвращается "
-            "список сотрудников юнита без фильтрации"
+            "Поисковая строка; если пусто — "
+            "возвращается список сотрудников юнита без фильтрации."
         ),
     ),
     session: AsyncSession = Depends(get_async_session),
@@ -129,20 +123,14 @@ async def list_unit_employees(
 ) -> list[EmployeeDetail]:
     """Возвращает список сотрудников для указанного оргюнита.
 
-    Список может быть отфильтрован по поисковой строке. Результат
-    сохраняет порядок, возвращаемый поисковым сервисом.
-
     Args:
         org_unit_id: Идентификатор оргюнита.
-        q: Поисковая строка. Если пусто, возвращается полный список юнита.
+        q: Поисковая строка.
         session: Асинхронная сессия базы данных.
-        _: Текущий пользователь (используется для проверки авторизации).
+        _: Текущий пользователь (для проверки авторизации).
 
     Returns:
-        list[EmployeeDetail]: Список детальных карточек сотрудников.
-
-    Raises:
-        HTTPException: В случае внутренних ошибок при обработке запроса.
+        Список детальных карточек сотрудников.
     """
 
     async def _to_detail(e: Employee) -> EmployeeDetail:
@@ -156,12 +144,13 @@ async def list_unit_employees(
                 title=e.manager.title,
             )
 
+        lowest_unit = e.direction or e.department
         org_unit_obj: OrgUnitInfo | None = None
-        if e.lowest_org_unit:
+        if lowest_unit:
             org_unit_obj = OrgUnitInfo(
-                id=e.lowest_org_unit.id,
-                name=e.lowest_org_unit.name,
-                unit_type=e.lowest_org_unit.unit_type,
+                id=lowest_unit.id,
+                name=lowest_unit.name,
+                unit_type=lowest_unit.unit_type,
             )
 
         photo_obj: MediaInfo | None = None
@@ -215,7 +204,8 @@ async def list_unit_employees(
             .where(Employee.id.in_(ids))
             .options(
                 selectinload(Employee.manager),
-                selectinload(Employee.lowest_org_unit),
+                selectinload(Employee.department),
+                selectinload(Employee.direction),
             ),
         )
         by_id = {e.id: e for e in full_rows.scalars().all()}
