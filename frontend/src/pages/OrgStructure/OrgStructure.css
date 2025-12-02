@@ -7,7 +7,7 @@
 .org-structure-main {
   flex: 1;
   padding: 20px 0;
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #dfffe8, #f3edff, #dcffe4);
 }
 
 .org-structure-header {

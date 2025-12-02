@@ -6,10 +6,11 @@
 
 .search-bar__input-container {
   position: relative;
+  width: 100%
 }
 
 .search-bar__input {
-  width: 100%;
+  width: 400px;
   padding: 10px 40px 10px 12px;
   border: 1px solid #ddd;
   border-radius: 20px;

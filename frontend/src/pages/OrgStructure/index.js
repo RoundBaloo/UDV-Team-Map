@@ -128,7 +128,7 @@ const LoadingState = () => (
 
 const OrgStructureHeader = ({ error, onRetry }) => (
   <div className="org-structure-header">
-    <h1>Организационная структура</h1>
+    <h1>Оргструктура UDV Group</h1>
     {error && (
       <div className="alert alert-warning">
         {error}

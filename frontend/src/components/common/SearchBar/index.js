@@ -8,7 +8,7 @@ const DEBOUNCE_DELAY = 300;
 const BLUR_DELAY = 200;
 
 const DEFAULT_TEXTS = {
-  placeholder: 'Поиск сотрудников...',
+  placeholder: 'Поиск',
   loading: 'Поиск...',
   noResults: 'Ничего не найдено',
   noDepartment: 'Не указан',

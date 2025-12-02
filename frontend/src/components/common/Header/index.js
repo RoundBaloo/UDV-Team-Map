@@ -113,9 +113,9 @@ const UserMenu = ({ user, onProfileClick, onLogout }) => {
           <div className="header__user-avatar">
             {user.first_name?.[0]}{user.last_name?.[0]}
           </div>
-          <span className="header__user-name">
+          {/* <span className="header__user-name">
             {formatEmployeeName(user.first_name, user.last_name)}
-          </span>
+          </span> */}
         </button>
         
         <button 
