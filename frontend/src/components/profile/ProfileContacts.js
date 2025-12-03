@@ -39,7 +39,7 @@ const ContactRow = ({ label, value, editing, fieldName, onFieldChange }) => {
   if (editing && fieldName) {
     return (
       <div className="contact-row">
-        <span className="contact-label">{label}</span>
+        {/* <span className="contact-label">{label}</span> */}
         <ProfileField
           value={value}
           editable={true}
@@ -54,7 +54,7 @@ const ContactRow = ({ label, value, editing, fieldName, onFieldChange }) => {
 
   return (
     <div className="contact-row">
-      <span className="contact-label">{label}</span>
+      {/* <span className="contact-label">{label}</span> */}
       <span className="contact-value">{value || '—'}</span>
     </div>
   );

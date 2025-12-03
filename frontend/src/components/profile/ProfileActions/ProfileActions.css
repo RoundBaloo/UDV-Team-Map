@@ -11,5 +11,7 @@
 
 .profile-actions__edit-buttons {
   display: flex;
+  justify-content: space-between;
   gap: 12px;
+  width: 100%;
 }

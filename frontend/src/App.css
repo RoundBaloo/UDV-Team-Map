@@ -30,8 +30,9 @@
 }
 
 .btn-primary {
-  background-color: #007bff;
-  color: white;
+  background-color: rgba(215, 214, 214, 0.378);
+  color: black;
+  border-radius: 25px;
 }
 
 .btn-primary:hover {
@@ -39,12 +40,13 @@
 }
 
 .btn-secondary {
-  background-color: #6c757d;
-  color: white;
+  background-color: rgba(216, 101, 101, 0.683);
+  color: black;
+  border-radius: 25px;
 }
 
 .btn-secondary:hover {
-  background-color: #545b62;
+  background-color: #0056b3;
 }
 
 /* Формы */
