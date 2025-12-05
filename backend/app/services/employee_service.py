@@ -107,7 +107,6 @@ async def apply_self_update(
         True, если данные сотрудника были изменены.
     """
     allowed = (
-        "middle_name",
         "bio",
         "skill_ratings",
         "work_phone",
@@ -142,7 +141,6 @@ async def apply_admin_update(
         True, если данные сотрудника были изменены.
     """
     allowed = (
-        "middle_name",
         "bio",
         "skill_ratings",
         "work_phone",
@@ -153,6 +151,7 @@ async def apply_admin_update(
         "work_format",
         "time_zone",
         "hire_date",
+        "direction_id",
         "is_admin",
         "is_blocked",
     )

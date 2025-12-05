@@ -67,7 +67,6 @@ class EmployeeSelfUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    middle_name: str | None = None
     bio: str | None = None
     skill_ratings: dict[str, int] | None = None
 
@@ -113,7 +112,6 @@ class EmployeeAdminUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    middle_name: str | None = None
     bio: str | None = None
     skill_ratings: dict[str, int] | None = None
 
@@ -128,6 +126,8 @@ class EmployeeAdminUpdate(BaseModel):
     )
     time_zone: str | None = None
     hire_date: date | None = None
+
+    direction_id: int | None = None
 
     is_admin: bool | None = None
     is_blocked: bool | None = None
