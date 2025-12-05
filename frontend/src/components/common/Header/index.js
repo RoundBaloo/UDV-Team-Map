@@ -8,6 +8,7 @@ import './Header.css';
 const ADMIN_ROUTES = {
   USERS: '/admin/users',
   PHOTOS: '/admin/photos',
+  SYNC: '/admin/sync',
 };
 
 const Header = () => {
@@ -144,6 +145,9 @@ const HeaderBottom = ({ isAdminPanelVisible }) => {
           </Link>
           <Link to={ADMIN_ROUTES.PHOTOS} className="header__admin-nav-link">
             Модерация фото
+          </Link>
+          <Link to={ADMIN_ROUTES.SYNC} className="header__admin-nav-link">
+            Синхронизация
           </Link>
         </nav>
       </div>

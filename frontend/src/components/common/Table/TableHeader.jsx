@@ -40,7 +40,6 @@ const TableHeader = ({
             </div>
           </th>
         ))}
-        <th className="table__actions-cell">Действия</th>
       </tr>
     </thead>
   );

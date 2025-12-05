@@ -9,9 +9,9 @@ import TeamPage from './pages/TeamPage';
 import Profile from './pages/Profile';
 import AdminUsersTable from './pages/AdminUsersTable';
 import PhotoModeration from './pages/PhotoModeration';
+import SyncStatus from './pages/SyncStatus';
 import './App.css';
 
-// Компонент защищенного маршрута
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { isAuthenticated, isAdmin, loading } = useAuth();
 
@@ -30,7 +30,6 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
   return children;
 };
 
-// Публичный маршрут (редирект если уже авторизован)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -49,7 +48,6 @@ function AppContent() {
   return (
     <div className="app">
       <Routes>
-        {/* Публичные маршруты */}
         <Route 
           path="/login" 
           element={
@@ -59,7 +57,6 @@ function AppContent() {
           } 
         />
         
-        {/* Защищенные маршруты */}
         <Route 
           path="/" 
           element={
@@ -87,7 +84,6 @@ function AppContent() {
           } 
         />
         
-        {/* Админские маршруты */}
         <Route 
           path="/admin/users" 
           element={
@@ -106,7 +102,15 @@ function AppContent() {
           } 
         />
         
-        {/* Fallback route */}
+        <Route 
+          path="/admin/sync" 
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <SyncStatus />
+            </ProtectedRoute>
+          } 
+        />
+        
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

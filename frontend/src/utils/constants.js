@@ -25,6 +25,7 @@ export const ROUTES = {
   TEAM: '/team/:id',
   ADMIN_USERS: '/admin/users',
   ADMIN_PHOTOS: '/admin/photos',
+  ADMIN_SYNC: '/admin/sync',
   ORG_STRUCTURE: '/structure',
 };
 

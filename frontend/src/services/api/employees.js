@@ -28,11 +28,7 @@ export const employeesApi = {
   },
 
   updateMe: async employeeData => {
-    const response = await apiClient.patch(
-      EMPLOYEES_ENDPOINTS.ME, 
-      employeeData,
-    );
-    
+    const response = await apiClient.patch(EMPLOYEES_ENDPOINTS.ME, employeeData);
     return response;
   },
 
@@ -42,6 +38,22 @@ export const employeesApi = {
     });
     
     const response = await apiClient.patch(endpoint, employeeData);
+    return response;
+  },
+
+  searchSkills: async (params = {}) => {
+    const queryString = buildQueryString(params);
+    const endpoint = `/api/employees/skills/search${queryString}`;
+    
+    const response = await apiClient.get(endpoint);
+    return response;
+  },
+
+  searchTitles: async (params = {}) => {
+    const queryString = buildQueryString(params);
+    const endpoint = `/api/employees/titles/search${queryString}`;
+    
+    const response = await apiClient.get(endpoint);
     return response;
   },
 };
