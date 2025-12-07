@@ -1,5 +1,7 @@
+// hooks/useAdminUsers.js
 import { useState, useEffect } from 'react';
-import { mockEmployee, mockCurrentUser, mockEmployeesByUnit } from '../utils/mockData';
+import { apiClient } from '../services/api/apiClient';
+import { API_ENDPOINTS } from '../utils/constants';
 
 export const useAdminUsers = () => {
   const [state, setState] = useState({
@@ -7,6 +9,7 @@ export const useAdminUsers = () => {
     loading: true,
     editingId: null,
     editedUser: {},
+    error: null,
   });
 
   useEffect(() => {
@@ -15,21 +18,53 @@ export const useAdminUsers = () => {
 
   const loadUsers = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setState(prev => ({ ...prev, loading: true, error: null }));
       
-      const allUsers = [mockEmployee, mockCurrentUser];
-      Object.values(mockEmployeesByUnit).forEach(unitUsers => {
-        allUsers.push(...unitUsers);
-      });
+      // Используем apiClient для запроса
+      const data = await apiClient.get(API_ENDPOINTS.EMPLOYEES.LIST);
       
-      const uniqueUsers = allUsers.filter((user, index, self) => 
-        index === self.findIndex(u => u.id === user.id)
-      );
+      // Преобразуем данные из API в формат таблицы
+      const transformedUsers = data.map(user => ({
+        id: user.employee_id,  // используем employee_id как id
+        email: user.email,
+        first_name: user.first_name,
+        middle_name: user.middle_name,
+        last_name: user.last_name,
+        title: user.title,
+        status: user.status,
+        work_city: user.work_city,
+        work_format: user.work_format,
+        time_zone: user.time_zone,
+        work_phone: user.work_phone,
+        mattermost_handle: user.mattermost_handle,
+        telegram_handle: user.telegram_handle,
+        birth_date: user.birth_date,
+        hire_date: user.hire_date,
+        bio: user.bio,
+        skill_ratings: user.skill_ratings,
+        is_admin: user.is_admin,
+        is_blocked: user.is_blocked,
+        last_login_at: user.last_login_at,
+        photo: user.photo,
+        manager: user.manager,
+        org_unit: user.org_unit,
+        // Добавляем поле для сортировки по имени
+        name: `${user.last_name || ''} ${user.first_name || ''} ${user.middle_name || ''}`.trim(),
+      }));
       
-      setState(prev => ({ ...prev, users: uniqueUsers, loading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        users: transformedUsers, 
+        loading: false,
+      }));
     } catch (error) {
       console.error('Error loading users:', error);
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        error: error.message,
+        users: [],
+      }));
     }
   };
 
@@ -41,20 +76,38 @@ export const useAdminUsers = () => {
         ...user,
         work_city: user.work_city || '',
         work_format: user.work_format || 'office',
-        grade: user.grade || '',
       },
     }));
   };
 
-  const handleSave = id => {
-    setState(prev => ({
-      ...prev,
-      users: prev.users.map(user => 
-        user.id === id ? { ...user, ...prev.editedUser } : user
-      ),
-      editingId: null,
-      editedUser: {},
-    }));
+  const handleSave = async id => {
+    try {
+      // Подготовка данных для обновления
+      const updateData = {
+        work_city: state.editedUser.work_city || null,
+        work_format: state.editedUser.work_format || 'office',
+      };
+      
+      // Используем apiClient для обновления пользователя
+      const endpoint = API_ENDPOINTS.EMPLOYEES.DETAIL.replace('{employee_id}', id);
+      await apiClient.patch(endpoint, updateData);
+      
+      // Обновляем локальное состояние после успешного сохранения
+      setState(prev => ({
+        ...prev,
+        users: prev.users.map(user => 
+          user.id === id ? { ...user, ...prev.editedUser } : user
+        ),
+        editingId: null,
+        editedUser: {},
+      }));
+      
+    } catch (error) {
+      console.error('Error saving user:', error);
+      setState(prev => ({ ...prev, error: error.message }));
+      // Можно добавить уведомление об ошибке
+      alert('Ошибка при сохранении изменений: ' + error.message);
+    }
   };
 
   const handleCancel = () => {
@@ -72,11 +125,17 @@ export const useAdminUsers = () => {
     }));
   };
 
+  // Функция для принудительного обновления данных
+  const refreshUsers = () => {
+    loadUsers();
+  };
+
   return {
     ...state,
     handleEdit,
     handleSave,
     handleCancel,
     handleFieldChange,
+    refreshUsers,
   };
 };
