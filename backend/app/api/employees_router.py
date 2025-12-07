@@ -216,15 +216,32 @@ async def list_employees(
             "список org_unit_id, под которыми должен лежать сотрудник."
         ),
     ),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=100,
+        description=(
+            "Максимальное количество сотрудников в ответе. "
+            "Если не задано и q пустой — возвращаются все найденные сотрудники. "
+            "Если не задано и q задан — используется внутренний лимит (10)."
+        ),
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Смещение от начала выборки (для пагинации).",
+    ),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[EmployeeDetail]:
-    """Возвращает список сотрудников с поиском и фильтрами.
+    """Возвращает список сотрудников с поиском, фильтрами и пагинацией.
 
     Args:
         q: Поисковая строка для полнотекстового поиска.
         skills: Фильтр по навыкам в формате 'skill_name:level'.
         titles: Фильтр по полным названиям должностей.
         legal_entity_ids: Список идентификаторов юрлиц для фильтрации.
+        limit: Максимальное количество записей в ответе.
+        offset: Смещение от начала выборки (для постраничного вывода).
         session: Асинхронная сессия базы данных.
 
     Returns:
@@ -241,6 +258,8 @@ async def list_employees(
         skill_filters=skill_filters,
         titles=titles or None,
         legal_entity_ids=legal_entity_ids or None,
+        limit=limit,
+        offset=offset,
     )
     ids = [e.id for e in rows]
     items = await asyncio.gather(

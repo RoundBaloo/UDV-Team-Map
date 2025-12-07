@@ -8,7 +8,7 @@ from __future__ import annotations
   чтобы можно было тестировать авторизацию до полноценной синхронизации из AD.
 
 Использование:
-  python scripts/set_password_for_email.py --email user@example.com --password Secret123!
+  python scripts/set_password_for_email.py --email user@example.com --password Qwerty123!
 """
 
 import argparse

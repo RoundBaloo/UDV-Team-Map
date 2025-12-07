@@ -207,6 +207,8 @@ async def search_employees(
     skill_filters: dict[str, int] | None = None,
     titles: list[str] | None = None,
     legal_entity_ids: list[int] | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[Employee]:
     """Ищет сотрудников по ФИО, должности, био и фильтрам.
 
@@ -219,6 +221,10 @@ async def search_employees(
         legal_entity_ids: список id org_unit с unit_type='legal_entity';
             выбираются сотрудники, чьи department/direction лежат под одним
             из этих юр. лиц.
+        limit: максимальное количество сотрудников в ответе.
+            - Если q не задано и limit=None — отдаём всех (старое поведение).
+            - Если q задано и limit=None — используем SEARCH_DEFAULT_LIMIT.
+        offset: смещение от начала выборки (для пагинации).
 
     Возвращает:
         Список ORM-объектов Employee.
@@ -270,11 +276,18 @@ async def search_employees(
             base = base.where(or_(*conds))
 
     if not q or not q.strip():
-        base = base.order_by(
+        stmt = base.order_by(
             Employee.last_name.asc(),
             Employee.first_name.asc(),
         )
-        return (await session.execute(base)).scalars().all()
+
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
+        elif offset:
+            stmt = stmt.offset(offset)
+
+        res = await session.execute(stmt)
+        return res.scalars().all()
 
     q_raw = q.strip()
 
@@ -303,7 +316,9 @@ async def search_employees(
         ),
     )
 
-    base = (
+    effective_limit = limit or SEARCH_DEFAULT_LIMIT
+
+    stmt = (
         base.order_by(
             ts_match.desc(),
             ts_rank.desc(),
@@ -311,10 +326,12 @@ async def search_employees(
             Employee.last_name.asc(),
             Employee.first_name.asc(),
         )
-        .limit(SEARCH_DEFAULT_LIMIT)
+        .limit(effective_limit)
+        .offset(offset)
     )
 
-    return (await session.execute(base)).scalars().all()
+    res = await session.execute(stmt)
+    return res.scalars().all()
 
 
 async def search_skill_names(

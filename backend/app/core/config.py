@@ -40,6 +40,14 @@ class Settings(BaseSettings):
         env="SYNC_INGEST_FILE_PATH",
     )
 
+    AD_LDAP_HOST: str = Field(..., env="AD_LDAP_HOST")
+    AD_LDAP_PORT: int = Field(389, env="AD_LDAP_PORT")
+    AD_USE_SSL: bool = Field(False, env="AD_USE_SSL")
+
+    AD_BASE_DN: str = Field(..., env="AD_BASE_DN")
+    AD_BIND_USER: str = Field(..., env="AD_BIND_USER")
+    AD_BIND_PASSWORD: str = Field(..., env="AD_BIND_PASSWORD")
+
     model_config: SettingsConfigDict = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
