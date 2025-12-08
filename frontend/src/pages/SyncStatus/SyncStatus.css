@@ -13,6 +13,16 @@
   gap: 16px;
 }
 
+.sync-status-main {
+  background: linear-gradient(135deg, #dfffe8, #f3edff, #dcffe4);
+  height: 100%;
+  padding-top: 20px;
+  padding-bottom: auto;
+}
+
+.sync-status-page {
+}
+
 .sync-status-header h1 {
   margin: 0;
   font-size: 24px;
@@ -97,9 +107,8 @@
 }
 
 .sync-table-container {
-  background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  background: linear-gradient(135deg, #effff4, #faf7ff, #f2fff7);
+  /* border: 1px solid #dee2e6; */
   overflow: hidden;
 }
 
