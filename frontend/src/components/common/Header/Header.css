@@ -23,8 +23,9 @@
 .header__left {
   display: flex;
   align-items: center;
-  gap: 40px;
+  /* gap: 40px; */
   flex: 1;
+  margin-right: 100px;
 }
 
 .header__logo {
@@ -33,7 +34,7 @@
   color: #333;
   text-decoration: none;
   white-space: nowrap;
-  margin-right: 70px;
+  margin-right: 50px;
 }
 
 .header__left .search-bar {
@@ -72,7 +73,7 @@
 }
 
 .header__admin-toggle:hover {
-  background-color: #f5f5f5;
+  background-color: #93ffe69f;
 }
 
 .header__admin-checkbox {
@@ -97,12 +98,12 @@
   text-decoration: none;
   font-size: 14px;
   padding: 5px 10px;
-  border-radius: 4px;
+  border-radius: 15px;
   transition: background-color 0.2s;
 }
 
 .header__admin-nav-link:hover {
-  background-color: #f5f5f5;
+  background-color: #a1f4e1b5;
   color: #333;
 }
 
@@ -124,21 +125,23 @@
   transition: background-color 0.2s;
 }
 
-.header__profile-btn:hover {
-  background-color: #f5f5f5;
-}
-
 .header__user-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #007bff;
+  background-color: #007bff;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: bold;
+}
+
+.header__user-avatar:hover {
+  transition: background-color 0.4s;
+  background-color: #0069d8;
+
 }
 
 .header__user-name {

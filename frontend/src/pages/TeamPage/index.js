@@ -36,13 +36,13 @@ const TeamPage = () => {
       <Breadcrumbs customPath={breadcrumbPath} />
       
       <main className="team-main">
-        <div className="container">
+        <div className="container team-content">
           <TeamHeader team={team} />
 
-          <div className="team-description">
+          {/* <div className="team-description">
             <p>{team.description}</p>
-          </div>
-
+          </div> */}
+          
           {manager && (
             <ManagerCard
               manager={manager}

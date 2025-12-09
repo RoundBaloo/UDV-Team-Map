@@ -99,6 +99,7 @@
   padding: 4px 8px;
   font-size: 12px;
   border-radius: 3px;
+  margin-top: 10px;
 }
 
 @media (max-width: 768px) {

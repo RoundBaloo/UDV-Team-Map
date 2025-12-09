@@ -1,7 +1,7 @@
 .breadcrumbs {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #dfffe8, #f3edff, #dcffe4);
   border-bottom: 1px solid #dee2e6;
-  padding: 10px 0;
+  padding: 15px 0;
 }
 
 .breadcrumbs__container {
@@ -12,7 +12,8 @@
 }
 
 .breadcrumbs__item {
-  color: #007bff;
+  color: rgba(0, 0, 0, 0.764);
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -21,7 +22,8 @@
 }
 
 .breadcrumbs__home {
-  font-weight: bold;
+  font-weight: 900;
+  color: black !important;
 }
 
 .breadcrumbs__separator {

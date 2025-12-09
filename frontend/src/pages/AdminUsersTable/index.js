@@ -122,7 +122,7 @@ const AdminUsersTable = () => {
             <h1>Управление пользователями</h1>
             <div className="admin-users-stats">
               <span>Всего пользователей: {users.length}</span>
-              {loading && <span className="loading-indicator"> • Загрузка...</span>}
+              {loading && <span className="loading-indicator">Загрузка...</span>}
               <button 
                 className="btn btn-secondary btn-sm" 
                 onClick={refreshUsers}
