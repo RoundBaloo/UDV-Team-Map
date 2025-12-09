@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/common/Header';
-import Breadcrumbs from '../../components/common/Breadcrumbs';
 import DepartmentList from '../../components/org-structure/DepartmentList';
 import { orgUnitsApi } from '../../services/api/orgUnits';
 import { mockOrgStructure } from '../../utils/mockData';
@@ -75,15 +74,6 @@ const OrgStructure = () => {
     loadData();
   };
 
-  const getBreadcrumbPath = () => {
-    const { selectedUnitId, orgData } = state;
-    if (selectedUnitId && orgData) {
-      const path = findPathToNode(orgData, selectedUnitId);
-      return path || [];
-    }
-    return [];
-  };
-
   if (state.loading) {
     return <LoadingState />;
   }
@@ -91,7 +81,6 @@ const OrgStructure = () => {
   return (
     <div className="org-structure-page">
       <Header />
-      <Breadcrumbs customPath={getBreadcrumbPath()} />
       
       <main className="org-structure-main">
         <div className="container">
