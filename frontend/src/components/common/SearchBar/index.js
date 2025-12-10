@@ -191,7 +191,7 @@ const SearchBar = () => {
           className={`search-bar__switch-btn ${searchType === 'orgUnits' ? 'active' : ''}`}
           onClick={() => handleSearchTypeChange('orgUnits')}
         >
-          Орг.единицы
+          Орг. единицы
         </button>
       </div>
       

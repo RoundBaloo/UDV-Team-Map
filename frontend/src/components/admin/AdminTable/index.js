@@ -16,7 +16,7 @@ const AdminTable = ({
   const defaultRenderActions = (row) => {
     return (
       <button
-        className="btn btn-primary btn-sm"
+        className="btn-user-edit"
         onClick={() => onEdit?.(row)}
         title="Редактировать"
       >

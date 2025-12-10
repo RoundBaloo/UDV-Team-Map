@@ -124,9 +124,10 @@
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: #f8f9fa;
+  background: transparent;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  border-left: 4px solid #007bff;
   transition: box-shadow 0.2s;
 }
 

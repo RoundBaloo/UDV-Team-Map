@@ -103,7 +103,7 @@ const AdminUsersTable = () => {
   const renderActions = row => {
     return (
       <button
-        className="btn btn-primary btn-sm"
+        className="btn-user-edit"
         onClick={() => handleEditClick(row)}
         title="Редактировать"
       >

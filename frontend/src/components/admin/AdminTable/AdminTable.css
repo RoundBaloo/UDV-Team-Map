@@ -102,6 +102,21 @@
   margin-top: 10px;
 }
 
+.btn-user-edit {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 20px;
+}
+
+.btn-user-edit:hover {
+  cursor: pointer;
+  background-color: #a1f4e0;
+  transition: background-color 0.3s;
+}
+
 @media (max-width: 768px) {
   .admin-table__container {
     font-size: 12px;
