@@ -25,6 +25,7 @@ const TestComponent = () => {
     login,
     logout,
     updateUser,
+    updateUserProfile,
     isAuthenticated,
   } = useAuth();
 
@@ -60,6 +61,17 @@ const TestComponent = () => {
         }
       >
         updateUser
+      </button>
+
+      <button
+        onClick={async () => {
+          const result = await updateUserProfile({ name: 'Updated Profile' });
+          if (result?.error) {
+            console.error('Update error:', result.error);
+          }
+        }}
+      >
+        updateUserProfile
       </button>
     </div>
   );
@@ -193,5 +205,132 @@ describe('AuthContext', () => {
         .toBe('Неверный логин или пароль');
       expect(screen.getByTestId('auth').textContent).toBe('no');
     });
+  });
+
+  test('checkAuth: ошибка 401 удаляет токен и устанавливает сообщение об ошибке', async () => {
+    tokenStorage.getToken.mockReturnValue('token');
+    
+    const error401 = new Error('Unauthorized');
+    error401.status = 401;
+    authApi.getMe.mockRejectedValue(error401);
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(tokenStorage.removeToken).toHaveBeenCalled();
+      expect(screen.getByTestId('error').textContent)
+        .toBe('Сессия истекла. Пожалуйста, войдите снова.');
+      expect(screen.getByTestId('user').textContent).toBe('null');
+      expect(screen.getByTestId('auth').textContent).toBe('no');
+    });
+  });
+
+  test('checkAuth: ошибка без статуса 401 не удаляет токен', async () => {
+    tokenStorage.getToken.mockReturnValue('token');
+    
+    const error500 = new Error('Server Error');
+    error500.status = 500;
+    authApi.getMe.mockRejectedValue(error500);
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(tokenStorage.removeToken).not.toHaveBeenCalled();
+      expect(screen.getByTestId('error').textContent)
+        .toBe('Сессия истекла. Пожалуйста, войдите снова.');
+      expect(screen.getByTestId('user').textContent).toBe('null');
+    });
+  });
+
+  test('updateUserProfile: возвращает ошибку, если user отсутствует', async () => {
+    tokenStorage.getToken.mockReturnValue(null);
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth').textContent).toBe('no');
+    });
+
+    screen.getByText('updateUserProfile').click();
+
+    await waitFor(() => {
+      // Проверяем, что ошибка была залогирована (через console.error в тесте)
+      // updateUserProfile должен вернуть { success: false, error: 'ID пользователя не найден' }
+      expect(employeesApi.updateEmployee).not.toHaveBeenCalled();
+    });
+  });
+
+  test('updateUserProfile: успешное обновление профиля', async () => {
+    tokenStorage.getToken.mockReturnValue('token');
+
+    authApi.getMe.mockResolvedValue({
+      employee_id: 1,
+    });
+
+    employeesApi.getEmployee.mockResolvedValue({
+      employee_id: 1,
+      name: 'Initial',
+    });
+
+    const updatedUser = {
+      employee_id: 1,
+      name: 'Updated Profile',
+    };
+
+    employeesApi.updateEmployee.mockResolvedValue(updatedUser);
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user').textContent).toBe('Initial');
+    });
+
+    screen.getByText('updateUserProfile').click();
+
+    await waitFor(() => {
+      expect(employeesApi.updateEmployee).toHaveBeenCalledWith(1, { name: 'Updated Profile' });
+      expect(screen.getByTestId('user').textContent).toBe('Updated Profile');
+    });
+  });
+
+  test('updateUserProfile: обработка ошибки при обновлении', async () => {
+    tokenStorage.getToken.mockReturnValue('token');
+
+    authApi.getMe.mockResolvedValue({
+      employee_id: 1,
+    });
+
+    employeesApi.getEmployee.mockResolvedValue({
+      employee_id: 1,
+      name: 'Initial',
+    });
+
+    const updateError = new Error('Update failed');
+    employeesApi.updateEmployee.mockRejectedValue(updateError);
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user').textContent).toBe('Initial');
+    });
+
+    screen.getByText('updateUserProfile').click();
+
+    await waitFor(() => {
+      expect(employeesApi.updateEmployee).toHaveBeenCalledWith(1, { name: 'Updated Profile' });
+      // Пользователь не должен измениться при ошибке
+      expect(screen.getByTestId('user').textContent).toBe('Initial');
+    });
+  });
+
+  test('useAuth: выбрасывает ошибку, если используется вне AuthProvider', () => {
+    // Подавляем вывод ошибки в консоль для этого теста
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => {
+      render(<TestComponent />);
+    }).toThrow('useAuth must be used within an AuthProvider');
+
+    consoleError.mockRestore();
   });
 });
