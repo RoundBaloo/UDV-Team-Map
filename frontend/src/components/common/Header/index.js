@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../services/auth/useAuth';
 import { formatEmployeeName } from '../../../utils/helpers';
 import SearchBar from '../SearchBar';
@@ -11,10 +11,23 @@ const ADMIN_ROUTES = {
   SYNC: '/admin/sync',
 };
 
+const ADMIN_PATHS = ['/admin/users', '/admin/photos', '/admin/sync'];
+
 const Header = () => {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isAdminPanelVisible, setIsAdminPanelVisible] = useState(false);
+
+  useEffect(() => {
+    const isOnAdminPage = ADMIN_PATHS.some(path => 
+      location.pathname.startsWith(path)
+    );
+    
+    if (isOnAdminPage) {
+      setIsAdminPanelVisible(true);
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -88,17 +101,15 @@ const HeaderTop = ({
 
 const AdminToggle = ({ isVisible, onToggle }) => {
   return (
-    <label className="header__admin-toggle">
-      <input 
-        type="checkbox"
-        checked={isVisible}
-        onChange={onToggle}
-        className="header__admin-checkbox"
-      />
+    <button
+      className={`header__admin-toggle ${isVisible ? 'header__admin-toggle--active' : ''}`}
+      onClick={onToggle}
+      type="button"
+    >
       <span className="header__admin-toggle-text">
         Административная панель
       </span>
-    </label>
+    </button>
   );
 };
 
@@ -114,9 +125,6 @@ const UserMenu = ({ user, onProfileClick, onLogout }) => {
           <div className="header__user-avatar">
             {user.first_name?.[0]}{user.last_name?.[0]}
           </div>
-          {/* <span className="header__user-name">
-            {formatEmployeeName(user.first_name, user.last_name)}
-          </span> */}
         </button>
         
         <button 

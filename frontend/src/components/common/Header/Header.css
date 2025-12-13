@@ -70,6 +70,7 @@
   border-radius: 54px;
   transition: background-color 0.2s;
   user-select: none;
+  border: none;
 }
 
 .header__admin-toggle:hover {
@@ -163,4 +164,8 @@
 .header__logout-btn:hover {
   background-color: #dc3545;
   color: white;
+}
+
+.header__admin-toggle:focus {
+  outline: none;
 }

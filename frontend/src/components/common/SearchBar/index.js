@@ -178,20 +178,24 @@ const SearchBar = () => {
 
   return (
     <div className="search-bar">
+      <div className="search-bar__label">
+        Поиск по:
+      </div>
+      
       <div className="search-bar__switcher">
         <button
           type="button"
           className={`search-bar__switch-btn ${searchType === 'employees' ? 'active' : ''}`}
           onClick={() => handleSearchTypeChange('employees')}
         >
-          Сотрудники
+          Сотрудникам
         </button>
         <button
           type="button"
           className={`search-bar__switch-btn ${searchType === 'orgUnits' ? 'active' : ''}`}
           onClick={() => handleSearchTypeChange('orgUnits')}
         >
-          Орг. единицы
+          Отделам
         </button>
       </div>
       
@@ -199,7 +203,7 @@ const SearchBar = () => {
         <input
           type="text"
           className="search-bar__input"
-          placeholder={searchType === 'employees' ? 'Поиск сотрудников...' : 'Поиск отделов...'}
+          placeholder={searchType === 'employees' ? 'Введите имя сотрудника...' : 'Введите название отдела...'}
           value={query}
           onChange={handleInputChange}
           onFocus={handleInputFocus}
@@ -240,7 +244,13 @@ const SearchBar = () => {
                 ) : (
                   <>
                     <div className="search-bar__suggestion-type">
-                      {item.unit_type}
+                      {item.unit_type === 'department' ? 'Департамент' : 
+                        item.unit_type === 'direction' ? 'Направление' : 
+                          item.unit_type === 'legal_entity' ? 'Юр. лицо' : 
+                            item.unit_type === 'domain' ? 'Домен' : 
+                              item.unit_type === 'group' ? 'Группа' : 
+                                item.unit_type === 'team' ? 'Команда' : 
+                                  item.unit_type}
                     </div>
                     {item.path && item.path.length > 0 && (
                       <div className="search-bar__suggestion-path">

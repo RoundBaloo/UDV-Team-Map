@@ -1,3 +1,4 @@
+import React from 'react';
 import './PhotoModerationItem.css';
 
 const PhotoModerationItem = ({ 
@@ -9,15 +10,17 @@ const PhotoModerationItem = ({
   const {
     photo_moderation_id,
     id,
-    employee_id,
-    employee,
+    employee_first_name,
+    employee_middle_name,
+    employee_last_name,
     photo,
   } = item;
 
   const moderationId = photo_moderation_id || id;
-  const employeeName = employee 
-    ? `${employee.first_name} ${employee.last_name}`
-    : `Сотрудник #${employee_id}`;
+  
+  // Формируем Фамилия Имя (отчество не обязательно)
+  const employeeName = `${employee_last_name} ${employee_first_name}`;
+  
   const photoUrl = photo?.public_url;
 
   const handleRejectClick = () => {
