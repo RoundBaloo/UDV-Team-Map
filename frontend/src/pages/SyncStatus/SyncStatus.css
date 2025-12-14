@@ -49,12 +49,12 @@
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: #a1f4e0;
+  color: black;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: #93ffe69f;
 }
 
 .btn-primary:disabled {
@@ -63,12 +63,12 @@
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: #a1f4e0;
+  color: black;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #545b62;
+  background: #93ffe69f;
 }
 
 .btn-secondary:disabled {

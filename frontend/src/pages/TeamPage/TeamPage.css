@@ -68,7 +68,7 @@
   background: linear-gradient(135deg, #ffffff, #f3fff7, #eafff1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  border-left: 4px solid #007bff;
+  border-left: 4px solid #50fcd4af;
 }
 
 .manager-avatar {
@@ -127,7 +127,7 @@
   background: transparent;
   border-radius: 8px;
   border: 1px solid #e9ecef;
-  border-left: 4px solid #007bff;
+  border-left: 4px solid #50fcd4af;
   transition: box-shadow 0.2s;
 }
 
@@ -210,13 +210,13 @@
 .clickable-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  background-color: #e3f2fd;
+  /* background-color: #e3f2fd; */
 }
 
-.manager-card.clickable-card:hover {
+/* .manager-card.clickable-card:hover {
   border-left-color: #1565c0;
-}
+} */
 
-.member-card.clickable-card:hover {
+/* .member-card.clickable-card:hover {
   border-color: #2196f3;
-}
+} */

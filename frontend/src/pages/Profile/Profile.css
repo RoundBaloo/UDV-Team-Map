@@ -156,14 +156,14 @@
 .field-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid #f0f0f0;
   gap: 16px;
 }
 
 .field-row--bio {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .field-label {

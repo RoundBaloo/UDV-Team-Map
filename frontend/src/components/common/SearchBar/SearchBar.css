@@ -7,15 +7,15 @@
   min-width: 600px;
   background-color: white;
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: 54px;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); */
 }
 
-.search-bar:focus-within {
+/* .search-bar:focus-within {
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
+} */
 
 .search-bar__label {
   display: flex;
@@ -52,16 +52,16 @@
   transition: all 0.2s;
   text-align: center;
   white-space: nowrap;
-  border-radius: 3px;
+  border-radius: 14px;
 }
 
 .search-bar__switch-btn:hover {
-  background-color: rgba(0, 123, 255, 0.1);
+  background-color: #a1f4e13f;
 }
 
 .search-bar__switch-btn.active {
-  background: #007bff;
-  color: white;
+  background: #a1f4e0;
+  color: black;
 }
 
 .search-bar__input-container {
