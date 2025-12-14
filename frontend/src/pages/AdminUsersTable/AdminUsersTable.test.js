@@ -157,7 +157,7 @@ describe('AdminUsersTable (расширенные тесты)', () => {
       expect(screen.getByTestId('mock-edit-user-modal').textContent).toContain('userId:1');
     });
   });
-
+  
   test('закрытие модалки сбрасывает selectedUserId', async () => {
     render(<AdminUsersTable />);
 
@@ -173,7 +173,7 @@ describe('AdminUsersTable (расширенные тесты)', () => {
       expect(screen.queryByTestId('mock-edit-user-modal')).not.toBeInTheDocument();
     });
   });
-
+  
   test('handleSaveSuccess вызывает refreshUsers после сохранения', () => {
     render(<AdminUsersTable />);
 

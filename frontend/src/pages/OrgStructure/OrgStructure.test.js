@@ -72,7 +72,7 @@ describe('OrgStructure page', () => {
       expect(screen.getByText(/Повторить/)).toBeInTheDocument();
     });
   });
-
+  
   test('нажатие кнопки "Повторить" повторно вызывает загрузку', async () => {
     orgUnitsApi.getOrgStructure.mockRejectedValueOnce(new Error('API Error'));
     orgUnitsApi.getOrgStructure.mockResolvedValueOnce([{ id: 1, name: 'Unit 1' }]);

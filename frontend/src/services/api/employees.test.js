@@ -18,7 +18,7 @@ describe('employeesApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/employees/?q=1');
     expect(res).toEqual([{ id: 1 }]);
   });
-
+  
   test('getEmployee использует buildEndpoint и вызывает apiClient.get', async () => {
     jest.spyOn(apiClient, 'get').mockResolvedValue({ id: 1 });
 

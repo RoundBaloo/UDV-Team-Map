@@ -79,7 +79,7 @@ describe('PhotoModeration page', () => {
     expect(screen.getByText(/Модерация фотографий/)).toBeInTheDocument();
     expect(screen.getByText(/Ожидают модерации:/) || true).toBeTruthy();
   });
-
+  
   test('approve вызывает API и удаляет элемент из списка', async () => {
     const items = [{ photo_moderation_id: 201 }, { photo_moderation_id: 202 }];
     photoModerationApi.getPendingPhotos.mockResolvedValueOnce({ items: [...items], total: 2 });

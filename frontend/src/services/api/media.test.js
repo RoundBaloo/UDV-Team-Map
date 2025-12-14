@@ -81,7 +81,7 @@ describe('mediaApi', () => {
     const onProgress = p => progresses.push(p);
 
     const fakeFile = { type: 'image/png', size: 100 };
-
+    
     await expect(mediaApi.uploadToPresignedUrl('https://upload.url', fakeFile, onProgress)).resolves.toBeUndefined();
 
     expect(progresses).toContain(50);

@@ -20,7 +20,7 @@ describe('photoModerationApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith(`${API_ENDPOINTS.PHOTO_MODERATION.PENDING}?page=1`);
     expect(res).toEqual([{ id: 2 }]);
   });
-
+  
   test('approvePhoto вызывает POST с decision approve', async () => {
     apiClient.post.mockResolvedValue({ success: true });
     const moderationId = 123;

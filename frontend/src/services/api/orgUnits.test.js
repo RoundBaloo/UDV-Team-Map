@@ -48,7 +48,7 @@ describe('orgUnitsApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/org-units/legal-entities/search?q=1');
     expect(res).toEqual([{ id: 2 }]);
   });
-
+  
   test('getUnitEmployees использует buildEndpoint и добавляет queryString', async () => {
     jest.spyOn(apiClient, 'get').mockResolvedValue([{ id: 10 }]);
 

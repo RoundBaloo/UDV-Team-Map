@@ -19,7 +19,7 @@ describe('syncApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/sync/jobs?page=1');
     expect(res).toEqual([{ id: 2 }]);
   });
-
+  
   test('getJobDetail вызывает apiClient.get с jobId и params', async () => {
     apiClient.get.mockResolvedValue({ id: 3 });
     const res = await syncApi.getJobDetail(42, { verbose: true });

@@ -9,7 +9,7 @@ jest.mock('../../services/auth/useAuth');
 
 describe('Login page', () => {
   const mockLogin = jest.fn();
-
+  
   beforeEach(() => {
     jest.clearAllMocks();
 

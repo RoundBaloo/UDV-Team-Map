@@ -14,7 +14,7 @@ describe('healthApi', () => {
     expect(res.data).toEqual({ status: 'ok' });
     expect(typeof res.timestamp).toBe('string');
   });
-
+  
   test('checkHealth возвращает ошибку при падении apiClient.get', async () => {
     jest.spyOn(apiClient, 'get').mockRejectedValue(new Error('Network error'));
 

@@ -1,11 +1,18 @@
+// tokenStorage.test.js
 import { tokenStorage } from './tokenStorage';
 
 describe('tokenStorage', () => {
   const TOKEN_KEY = 'udv_access_token';
 
   beforeEach(() => {
+    // Очистим localStorage и восстановим все шпионы/моки
     localStorage.clear();
+    jest.restoreAllMocks();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   test('getToken возвращает токен из localStorage', () => {
@@ -34,67 +41,66 @@ describe('tokenStorage', () => {
   });
 
   test('hasToken возвращает false если токена нет', () => {
-    expect(tokenStorage.hasToken()).toBe(false);
-  });
-
-  test('getToken обрабатывает ошибки и логирует их', () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const orig = localStorage.getItem;
-    const error = new Error('Storage error');
-    localStorage.getItem = () => { throw error; };
-
-    try {
-      const result = tokenStorage.getToken();
-      expect(result).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error getting token from storage:', error);
-    } finally {
-      localStorage.getItem = orig;
-      consoleErrorSpy.mockRestore();
-    }
-  });
-
-  test('setToken обрабатывает ошибки и логирует их', () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const orig = localStorage.setItem;
-    const error = new Error('Storage error');
-    localStorage.setItem = () => { throw error; };
-
-    try {
-      expect(() => tokenStorage.setToken('abc')).not.toThrow();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error saving token to storage:', error);
-    } finally {
-      localStorage.setItem = orig;
-      consoleErrorSpy.mockRestore();
-    }
-  });
-
-  test('removeToken обрабатывает ошибки и логирует их', () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const orig = localStorage.removeItem;
-    const error = new Error('Storage error');
-    localStorage.removeItem = () => { throw error; };
-
-    try {
-      expect(() => tokenStorage.removeToken()).not.toThrow();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error removing token from storage:', error);
-    } finally {
-      localStorage.removeItem = orig;
-      consoleErrorSpy.mockRestore();
-    }
-  });
-
-  test('hasToken возвращает true когда getToken возвращает токен', () => {
-    localStorage.setItem(TOKEN_KEY, 'test-token');
-    expect(tokenStorage.hasToken()).toBe(true);
-  });
-
-  test('hasToken возвращает false когда getToken возвращает null', () => {
     localStorage.removeItem(TOKEN_KEY);
     expect(tokenStorage.hasToken()).toBe(false);
   });
 
-  test('hasToken возвращает false когда getToken возвращает пустую строку', () => {
+  // ---- Тесты ошибок: используем spyOn на прототипе Storage ----
+
+  test('getToken обрабатывает ошибки и логирует их', () => {
+    const error = new Error('Storage error (getItem)');
+    // Перехватываем вызовы getItem и заставляем их кидать
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw error;
+    });
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = tokenStorage.getToken();
+
+    expect(result).toBeNull();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error getting token from storage:', error);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('setToken обрабатывает ошибки и логирует их', () => {
+    const error = new Error('Storage error (setItem)');
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw error;
+    });
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Не должно кидать исключение наружу
+    expect(() => tokenStorage.setToken('abc')).not.toThrow();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error saving token to storage:', error);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('removeToken обрабатывает ошибки и логирует их', () => {
+    const error = new Error('Storage error (removeItem)');
+    jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw error;
+    });
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => tokenStorage.removeToken()).not.toThrow();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error removing token from storage:', error);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  // Проверки граничных значений для hasToken
+  test('hasToken возвращает false когда токен пустая строка', () => {
     localStorage.setItem(TOKEN_KEY, '');
     expect(tokenStorage.hasToken()).toBe(false);
+  });
+
+  test('hasToken возвращает true когда getToken возвращает значение', () => {
+    localStorage.setItem(TOKEN_KEY, 'test-token');
+    expect(tokenStorage.hasToken()).toBe(true);
   });
 });

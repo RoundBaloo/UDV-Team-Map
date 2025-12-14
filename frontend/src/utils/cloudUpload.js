@@ -1,4 +1,3 @@
-// src/utils/uploadHelpers.js
 import { mediaApi } from '../services/api/media';
 import { photoModerationApi } from '../services/api/photoModeration';
 

@@ -17,7 +17,7 @@ describe('authApi', () => {
     });
     expect(res).toEqual({ access_token: 'abc' });
   });
-
+  
   test('getMe вызывает apiClient.get', async () => {
     jest.spyOn(apiClient, 'get').mockResolvedValue({ employee_id: 1 });
     const res = await authApi.getMe();

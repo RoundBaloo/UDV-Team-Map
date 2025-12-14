@@ -1,5 +1,3 @@
-// src/utils/mockData.js
-
 // Базовые моки сотрудников
 export const mockEmployee = {
   id: 1,
@@ -58,9 +56,6 @@ export const mockTeam = {
     },
   ],
 };
-
-// Моки сотрудников для каждого конечного подразделения
-// src/utils/mockData.js
 
 export const mockEmployeesByUnit = {
   // UDV Digital Transformation

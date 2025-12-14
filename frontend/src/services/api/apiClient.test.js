@@ -12,7 +12,7 @@ describe('apiClient', () => {
   afterEach(() => {
     jest.resetAllMocks();
   });
-
+  
   test('добавляет Authorization заголовок, если токен существует', async () => {
     fetch.mockResolvedValue({
       ok: true,
